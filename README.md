@@ -3,7 +3,11 @@
 Your org as a living low-poly 3D city. Districts are zones, buildings are
 apps, cranes are builds, fires are failures, and the sun tracks your real
 local time. A [Kontract](https://konstruct.civo.com/docs/next/konduit/kontract)
-theme, `game` profile, full write surface.
+theme, `game` profile, full write surface. A
+[Theme Labs](https://konstruct.civo.com/docs/next/konduit/labs) experiment —
+unsupported, fun on purpose.
+
+Upstream: [konstructio/kontract-theme-metropolis](https://github.com/konstructio/kontract-theme-metropolis).
 
 Rendering: three.js (vendored in `static/vendor/`, no build step, no CDN).
 Server: the starter theme's Go static server (`go:embed`), built by
