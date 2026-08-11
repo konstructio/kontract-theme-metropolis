@@ -77,8 +77,10 @@ export function createInspector(store, layout, ctx = {}) {
 
   function scaleControls(app) {
     const setReplicas = (n) =>
-      act("scale", () => actions.updateApp(app.name, { replicas: n }),
-        "REZONED", `${app.name} now runs ${n} replica${n === 1 ? "" : "s"}.`);
+      act("scale", async () => {
+        await actions.updateApp(app.name, { replicas: n });
+        window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "scale-app" } }));
+      }, "REZONED", `${app.name} now runs ${n} replica${n === 1 ? "" : "s"}.`);
     const minus = el("button", { class: "mini-btn" }, "−");
     const plus = el("button", { class: "mini-btn" }, "+");
     minus.addEventListener("click", guard(() => app.replicas > 1 && setReplicas(app.replicas - 1)));
@@ -92,8 +94,10 @@ export function createInspector(store, layout, ctx = {}) {
     btn.addEventListener("click", guard(() => {
       const branch = input.value.trim();
       if (!branch || branch === app.branch) return;
-      act("reroute", () => actions.updateApp(app.name, { branch }),
-        "SUPPLY LINE REROUTED", `${app.name} now builds from "${branch}".`);
+      act("reroute", async () => {
+        await actions.updateApp(app.name, { branch });
+        window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "change-branch" } }));
+      }, "SUPPLY LINE REROUTED", `${app.name} now builds from "${branch}".`);
       store.addTicker("branch", `${app.name} resupplied from ${branch}`);
     }));
     return el("span", { class: "branch-ctl" }, input, btn);
@@ -165,8 +169,10 @@ export function createInspector(store, layout, ctx = {}) {
           if (domain !== (app.custom_domain || "")) jobs.push(() => actions.updateApp(app.name, { custom_domain: domain }));
           if (pub.checked !== !!app.public_url_enabled) jobs.push(() => actions.updateApp(app.name, { public_url_enabled: pub.checked }));
           if (!jobs.length) return wizards.closeModal();
-          act("address", async () => { for (const j of jobs) await j(); },
-            "ADDRESS REGISTERED", domain ? `${domain} points at ${app.name}.` : "Public access updated.");
+          act("address", async () => {
+            for (const j of jobs) await j();
+            if (pub.checked) window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "public-url" } }));
+          }, "ADDRESS REGISTERED", domain ? `${domain} points at ${app.name}.` : "Public access updated.");
           wizards.closeModal();
         } }, "Register")));
   }
@@ -185,7 +191,10 @@ export function createInspector(store, layout, ctx = {}) {
         b.addEventListener("click", () => {
           if (activeTab === "wire" && id !== "wire") closeStreams();
           activeTab = id;
-          if (id === "builds") buildLogText = null;
+          if (id === "builds") {
+            buildLogText = null;
+            window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "build-logs" } }));
+          }
           if (id === "history") historyRows = null;
           renderApp(store.state, app.name);
         });
@@ -305,7 +314,10 @@ export function createInspector(store, layout, ctx = {}) {
     const caps = state.platform.caps;
     const actionRow = el("div", { class: "actions" },
       el("button", { class: "mini-btn", onclick: guard(() =>
-        act("renovation", () => actions.redeploy(app.name), "RENOVATION ORDERED", `${app.name} is rebuilding from ${app.branch}.`)) },
+        act("renovation", async () => {
+          await actions.redeploy(app.name);
+          window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "redeploy" } }));
+        }, "RENOVATION ORDERED", `${app.name} is rebuilding from ${app.branch}.`)) },
         "renovate"),
       el("button", { class: "mini-btn", onclick: guard(() => envEditor(app)) }, "utilities"),
       (!caps.length || caps.includes("volumes"))

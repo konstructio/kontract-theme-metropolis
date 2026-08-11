@@ -94,6 +94,7 @@ async function boot() {
           (prev === "Building" || prev === "Pushing" || prev === "Deploying")
         ) {
           effects.celebrate(app.name, { friday: new Date().getDay() === 5 });
+          window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "app-live" } }));
         }
         lastPhase.set(app.name, app.phase);
       }
@@ -131,9 +132,55 @@ async function boot() {
     startSampleTimeline(store);
   }
 
-  const { createWizards } = await import("./ui/wizards.js");
+  const [{ createWizards }, { createGame, levelFor }, { createCharacterScreen }, { createShop }] =
+    await Promise.all([
+      import("./ui/wizards.js"),
+      import("./ui/quests.js"),
+      import("./ui/character.js"),
+      import("./ui/shop.js"),
+    ]);
   const wizards = createWizards(store, actions, hud, effects);
   createInspector(store, layout, { actions, wizards, hud });
+
+  const gamectl = createGame(store, actions, hud);
+  const character = createCharacterScreen(store, gamectl, wizards);
+  const shop = createShop(store, gamectl, wizards, actions);
+  wizards.railBtn("City Hall", shop.open);
+  wizards.railBtn("The Mayor", character.open);
+  gamectl.onChange((g) => hud.setMayor({ name: g.name, level: levelFor(g.xp), xp: g.xp }));
+
+  // ---- easter eggs ----
+  // five clicks on the fountain scatter the pigeons
+  let fountainClicks = [];
+  window.addEventListener("metropolis:fountain-click", async () => {
+    const now = performance.now();
+    fountainClicks = fountainClicks.filter((t) => now - t < 10000);
+    fountainClicks.push(now);
+    if (fountainClicks.length >= 5) {
+      fountainClicks = [];
+      const THREE = await import("three");
+      for (let i = 0; i < 4; i++) {
+        setTimeout(() => {
+          particles.burst(new THREE.Vector3((Math.random() - 0.5) * 10, 2, (Math.random() - 0.5) * 10), {
+            count: 30, color: 0xe8e4da, speed: 6, gravity: -1.5, life: 2.2,
+          });
+        }, i * 250);
+      }
+      hud.showToast("THE PIGEONS", "You've disturbed the plaza flock.");
+    }
+  });
+  // typing "civo" turns the whole fleet into Civo taxis for a minute
+  let typed = "";
+  window.addEventListener("keydown", (e) => {
+    if (e.key.length !== 1) return;
+    typed = (typed + e.key.toLowerCase()).slice(-4);
+    if (typed === "civo") {
+      ambient.setTaxiMode(60);
+      hud.showToast("CIVO TAXI CO.", "Every cab in the city, on the house — for one minute.");
+    }
+  });
+  // the tenth building ever raises the zeppelin
+  window.addEventListener("metropolis:tenth-ship", () => effects.zeppelin());
 
   // The sun only needs a real-time nudge now and then, not every frame.
   let skyAccum = 0;

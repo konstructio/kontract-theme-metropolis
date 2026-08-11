@@ -54,6 +54,9 @@ export function createAmbient(scene, roads, layout, particles) {
     return { p: last.clone(), heading: 0 };
   }
 
+  const carHex = []; // remember each car's own paint for taxi-mode restore
+  let taxiUntil = 0;
+
   function setTrafficDensity(liveApps) {
     const want = Math.min(MAX_CARS, 16 + liveApps * 9);
     while (carState.length < want) {
@@ -63,12 +66,30 @@ export function createAmbient(scene, roads, layout, particles) {
         offset: rng(),
         speed: 0.012 + rng() * 0.02, // fraction of path per second
       });
-      carColor.setHex(CAR_COLORS[Math.floor(rng() * CAR_COLORS.length)]);
+      carHex[i] = CAR_COLORS[Math.floor(rng() * CAR_COLORS.length)];
+      carColor.setHex(performance.now() < taxiUntil ? 0x39c0c8 : carHex[i]);
       cars.setColorAt(i, carColor);
     }
     carState.length = want;
     cars.count = want;
     if (cars.instanceColor) cars.instanceColor.needsUpdate = true;
+  }
+
+  function paintFleet(hex) {
+    for (let i = 0; i < carState.length; i++) {
+      carColor.setHex(hex === null ? carHex[i] : hex);
+      cars.setColorAt(i, carColor);
+    }
+    if (cars.instanceColor) cars.instanceColor.needsUpdate = true;
+  }
+
+  // easter egg: every car becomes a Civo taxi for a while
+  function setTaxiMode(seconds) {
+    taxiUntil = performance.now() + seconds * 1000;
+    paintFleet(0x39c0c8);
+    setTimeout(() => {
+      if (performance.now() >= taxiUntil) paintFleet(null);
+    }, seconds * 1000 + 100);
   }
 
   // ---------- pedestrians ----------
@@ -257,5 +278,5 @@ export function createAmbient(scene, roads, layout, particles) {
     collectBlinkers();
   }
 
-  return { update, sync };
+  return { update, sync, setTaxiMode };
 }

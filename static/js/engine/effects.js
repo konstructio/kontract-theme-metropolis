@@ -111,5 +111,54 @@ export function createEffects(scene, layout, particles, store) {
     if (celebration && performance.now() > celebration.endAt) skip();
   }
 
-  return { update, sync, celebrate, skip };
+  // easter egg: the tenth building ever raises a zeppelin over the skyline
+  let zeppelinState = null;
+  function zeppelin() {
+    if (zeppelinState) return;
+    const g = new THREE.Group();
+    const body = new THREE.Mesh(
+      new THREE.CapsuleGeometry(2.2, 9, 6, 12),
+      new THREE.MeshLambertMaterial({ color: 0xd8d2c2 })
+    );
+    body.rotation.z = Math.PI / 2;
+    g.add(body);
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.6, 0.18), new THREE.MeshLambertMaterial({ color: 0x39c0c8 }));
+    fin.position.x = -5.4;
+    g.add(fin);
+    const banner = new THREE.Mesh(
+      new THREE.BoxGeometry(10, 2.4, 0.06),
+      new THREE.MeshLambertMaterial({ color: 0xf5a623 })
+    );
+    banner.position.set(9, -1.5, 0);
+    g.add(banner);
+    const label = document.createElement("div");
+    label.className = "hover-label";
+    const strong = document.createElement("strong");
+    strong.textContent = "KONSTRUCT — TEN BUILDINGS AND COUNTING";
+    label.append(strong);
+    import("three/addons/renderers/CSS2DRenderer.js").then(({ CSS2DObject }) => {
+      const tag = new CSS2DObject(label);
+      tag.position.set(9, -3, 0);
+      g.add(tag);
+    });
+    g.position.set(-180, 60, -40);
+    scene.add(g);
+    zeppelinState = { g, t: 0 };
+  }
+
+  const baseUpdate = update;
+  function updateWithZeppelin(dt) {
+    baseUpdate(dt);
+    if (zeppelinState) {
+      zeppelinState.t += dt;
+      zeppelinState.g.position.x = -180 + zeppelinState.t * 9;
+      zeppelinState.g.position.y = 60 + Math.sin(zeppelinState.t * 0.5) * 2;
+      if (zeppelinState.g.position.x > 200) {
+        zeppelinState.g.removeFromParent();
+        zeppelinState = null;
+      }
+    }
+  }
+
+  return { update: updateWithZeppelin, sync, celebrate, skip, zeppelin };
 }

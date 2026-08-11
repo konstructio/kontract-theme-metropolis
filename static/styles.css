@@ -268,3 +268,30 @@ html, body {
 .hrow { display: flex; gap: 8px; font-size: 11.5px; align-items: baseline; }
 .hrow b { color: var(--gold); }
 .hphase { font-weight: 700; font-size: 10.5px; }
+
+/* ---- game layer ---- */
+.hud-mayor { margin-left: auto; font-size: 12px; opacity: 0.85; color: var(--gold); white-space: nowrap; }
+.mayor-head { margin-bottom: 6px; }
+.slot-row h3 { text-transform: capitalize; }
+.cos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.cos-btn {
+  background: rgba(0, 0, 0, 0.3); border: var(--hud-border); border-radius: 7px;
+  color: var(--paper); padding: 8px; cursor: pointer; text-align: left;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.cos-btn small { opacity: 0.6; font-size: 10px; }
+.cos-btn.sel { border-color: var(--gold); }
+.cos-btn.sel b { color: var(--gold); }
+.cos-btn.locked { opacity: 0.45; cursor: not-allowed; }
+.quests { display: flex; flex-direction: column; gap: 4px; }
+.quest-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; }
+.quest-row.done { opacity: 0.55; }
+.quest-row.done .q-title { text-decoration: line-through; }
+.q-mark { color: var(--gold); width: 14px; }
+.q-xp { margin-left: auto; font-size: 11px; opacity: 0.7; }
+.shop-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid rgba(243, 245, 247, 0.08);
+}
+.shop-row p { margin: 2px 0 0; }
+.shop-row .btn { text-decoration: none; white-space: nowrap; }

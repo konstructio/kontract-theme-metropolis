@@ -127,6 +127,10 @@ export function createPlaza(scene) {
   const jet = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.5, 1.6, 8), lambert(0x9aa4ab));
   jet.position.y = 1.2;
   fountain.add(jet);
+  fountain.userData = { kind: "fountain" };
+  fountain.traverse((o) => {
+    if (o.isMesh) o.userData = fountain.userData;
+  });
   plaza.add(fountain);
 
   // --- Deterministic greenery ring ---

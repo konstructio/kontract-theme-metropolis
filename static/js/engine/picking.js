@@ -140,6 +140,8 @@ export function createPicking(engine, layout, store) {
       store.update({ selection: { type: "shop", id: "cityhall" } });
     } else if (d.kind === "mayor") {
       store.update({ selection: { type: "mayor", id: "mayor" } });
+    } else if (d.kind === "fountain") {
+      window.dispatchEvent(new CustomEvent("metropolis:fountain-click"));
     }
   });
 

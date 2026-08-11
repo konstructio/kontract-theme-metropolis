@@ -25,10 +25,16 @@ export function createHud(store, { dayNight, effects, onSelectApp }) {
     el("b", { class: "bar" }, memFill),
     quotaText
   );
+  const mayorEl = el("span", { class: "hud-mayor" });
   top.append(
     el("div", { class: "brand" }, el("strong", {}, "METROPOLIS"), orgEl, clockEl),
-    quotaWrap
+    quotaWrap,
+    mayorEl
   );
+
+  function setMayor({ name, level, xp }) {
+    mayorEl.textContent = `${name} · lvl ${level} · ${xp} xp`;
+  }
 
   // ---- bottom: incidents chip + herald ticker ----
   const incidentsChip = el("button", { class: "incidents", hidden: "hidden" });
@@ -96,5 +102,5 @@ export function createHud(store, { dayNight, effects, onSelectApp }) {
     setTimeout(() => t.remove(), 5800);
   }
 
-  return { showToast };
+  return { showToast, setMayor };
 }

@@ -58,6 +58,7 @@ export function createWizards(store, actions, hud, effects) {
         await actions.createZone(name, nameInput.value.trim());
         hud.showToast("SURVEYORS DISPATCHED", `District "${nameInput.value.trim()}" is being platted.`);
         store.addTicker("zone", `New district claimed: ${nameInput.value.trim()}`);
+        window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "create-zone" } }));
         closeModal();
         if (onClaimed) onClaimed(name);
       } catch (e) {
@@ -99,6 +100,9 @@ export function createWizards(store, actions, hud, effects) {
     box.textContent = "";
     box.append(el("header", {}, el("h2", {}, "Construct a Building"), el("button", { class: "x", onclick: closeModal }, "×")));
 
+    if (repos.length) {
+      window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "register-app" } }));
+    }
     if (!repos.length) {
       box.append(
         el("p", {}, "No registered repos yet — a building needs a blueprint."),
@@ -235,6 +239,7 @@ export function createWizards(store, actions, hud, effects) {
         closeModal();
         hud.showToast("GROUNDBREAKING", `${form.name} is under construction in ${form.zone}.`);
         store.addTicker("ship", `Groundbreaking: ${form.name} (${form.zone})`);
+        window.dispatchEvent(new CustomEvent("metropolis:hook", { detail: { hook: "ship-app" } }));
         effects.celebrate(form.name, { friday: new Date().getDay() === 5 });
         store.update({ selection: { type: "app", id: form.name } });
       } catch (e) {
