@@ -122,13 +122,16 @@ async function boot() {
     effects.update(dt);
   });
 
+  let bridgeActions = null;
   if (launched) {
-    // M5: bridge.js boots the real data feed here.
-    store.update({ launched: true });
+    const { createBridge } = await import("./bridge.js");
+    const bridge = createBridge({ toast: hud.showToast });
+    bridgeActions = await bridge.boot();
   } else {
     store.update(sampleSnapshot());
     startSampleTimeline(store);
   }
+  void bridgeActions; // wizards/inspector wire onto this in M6
 
   // The sun only needs a real-time nudge now and then, not every frame.
   let skyAccum = 0;

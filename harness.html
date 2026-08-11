@@ -1,0 +1,252 @@
+<!doctype html>
+<!-- LOCAL DEV ONLY — never shipped (lives outside static/, go:embed can't see it).
+
+     A mock Konstruct parent window: iframes the theme with the same sandbox
+     attributes the real platform uses and answers kontract-rpc / stream
+     messages from fixtures. Write ops mutate the fixture state and log their
+     exact payloads, so the wizards can be exercised end-to-end offline.
+
+     Usage:  go run .   then open harness.html (file:// works)
+             ?port=8091 to point at a different theme port
+             ?fail=apps,quota to make ops reject (graceful-degradation tests)
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Metropolis Harness — mock Konstruct</title>
+  <style>
+    body { margin: 0; display: flex; height: 100vh; font-family: ui-monospace, monospace; background: #0b0f14; color: #cfd8e3; }
+    iframe { flex: 1; border: 0; }
+    #side { width: 380px; display: flex; flex-direction: column; border-left: 2px solid #223; }
+    #side h1 { font-size: 13px; padding: 10px 12px; margin: 0; background: #16202b; color: #f5a623; }
+    #ops { flex: 1; overflow-y: auto; font-size: 11px; padding: 8px 12px; white-space: pre-wrap; word-break: break-all; }
+    .op { border-bottom: 1px solid #1c2836; padding: 6px 0; }
+    .op b { color: #39c0c8; }
+    .op.write b { color: #ff7847; }
+  </style>
+</head>
+<body>
+  <iframe id="theme" sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-modals allow-downloads"></iframe>
+  <div id="side">
+    <h1>HARNESS — mock Konstruct parent (org: harness-org)</h1>
+    <div id="ops"></div>
+  </div>
+
+<script>
+(() => {
+  const qs = new URLSearchParams(location.search);
+  const port = qs.get("port") || "8080";
+  const failOps = new Set((qs.get("fail") || "").split(",").filter(Boolean));
+  const ORG = "harness-org";
+  const frame = document.getElementById("theme");
+  frame.src = `http://localhost:${port}/?org=${ORG}`;
+
+  const opsEl = document.getElementById("ops");
+  const WRITES = new Set(["createZone", "deleteZone", "shipApp", "updateApp", "deleteApp", "redeploy", "saveCharacter"]);
+  function logOp(op, args, note) {
+    const div = document.createElement("div");
+    div.className = "op" + (WRITES.has(op) ? " write" : "");
+    const b = document.createElement("b");
+    b.textContent = op;
+    div.append(b, " " + JSON.stringify(args) + (note ? "  → " + note : ""));
+    opsEl.prepend(div);
+  }
+
+  // ---------------- fixture state ----------------
+  const state = {
+    zones: [
+      { name: "downtown", display_name: "Downtown", status: { phase: "Ready", apps: 2 } },
+      { name: "riverside", display_name: "Riverside", status: { phase: "Ready", apps: 1 } },
+    ],
+    apps: [
+      mkApp("gateway", "downtown", "Live", "m", 2, { url: "https://gateway.harness.example", url_ready: true }),
+      mkApp("ledger", "downtown", "Live", "s", 1, { url: "", url_ready: false }),
+      mkApp("docs-site", "riverside", "Failed", "s", 1, { message: "build failed: exit status 2 (npm ci)" }),
+    ],
+    character: {
+      display_name: "Mayor Harness",
+      appearance: {},
+      xp: 120,
+      level: 2,
+      quests: [],
+      inventory: [],
+      equipped: {},
+    },
+  };
+
+  function mkApp(name, zone, phase, size, replicas, st) {
+    return {
+      name, app_name: name, zone_ref: zone, size, replicas,
+      branch: "main", repo_name: "harness/" + name, repo_url: "https://git.example.com/harness/" + name,
+      port: 8080, env: [], volume: null, custom_domain: "", public_url_enabled: true,
+      status: Object.assign({ phase, message: "" }, st || {}),
+    };
+  }
+
+  function series(base, wobble) {
+    const pts = []; const now = Date.now();
+    for (let i = 29; i >= 0; i--) pts.push({ t: now - i * 120000, v: Math.max(0, base + Math.sin(i / 3) * wobble) });
+    return pts;
+  }
+
+  // ---------------- RPC handlers ----------------
+  const handlers = {
+    discover: () => ({
+      version: "v2",
+      org: { name: ORG, display_name: "Harness Org" },
+      capabilities: ["apps", "zones", "quota", "runtime-logs", "app-events", "volumes", "custom-domains", "metrics", "character", "shop", "universe"],
+      app_sizes: [
+        { key: "xs", cpu: "250m", memory: "256Mi" },
+        { key: "s", cpu: "500m", memory: "512Mi" },
+        { key: "m", cpu: "1", memory: "1Gi" },
+        { key: "l", cpu: "2", memory: "2Gi" },
+      ],
+      rates: {},
+    }),
+    zones: () => state.zones,
+    apps: () => state.apps,
+    appRepos: () => [
+      { repo_name: "harness/gateway", repo_url: "https://git.example.com/harness/gateway" },
+      { repo_name: "harness/ledger", repo_url: "https://git.example.com/harness/ledger" },
+      { repo_name: "harness/new-idea", repo_url: "https://git.example.com/harness/new-idea" },
+    ],
+    quota: () => ({
+      plan: "harness", capped: true,
+      cpu: { used: 3.5, limit: 8 }, memory: { used: 3.5, limit: 12 }, storage: { used: 1, limit: 10 },
+    }),
+    metrics: (org, name) => ({
+      series: [
+        { name: "cpu", points: series(0.4, 0.2) },
+        { name: "cpu_limit", points: series(1, 0) },
+        { name: "memory", points: series(300, 60) },
+        { name: "network_rx", points: series(200000, 90000) },
+      ],
+    }),
+    regions: () => [{ name: "harness-region" }],
+    deployments: (org, name) => [
+      { build: 3, ref: "main", phase: "Succeeded", revision: "abc1234", image: "img:3", started_at: new Date(Date.now() - 3600e3).toISOString(), finished_at: new Date(Date.now() - 3500e3).toISOString() },
+      { build: 2, ref: "main", phase: "Failed", reason: "npm ci exit 2", started_at: new Date(Date.now() - 7200e3).toISOString() },
+    ],
+    buildLogs: (org, name) => "[harness] step 1/4 detect\n[harness] step 2/4 restore\n[harness] step 3/4 build\n[harness] step 4/4 export image",
+    character: () => state.character,
+
+    saveCharacter: (org, spec) => { state.character = Object.assign({}, state.character, spec); return { ok: true }; },
+    createZone: (org, zone) => {
+      if (state.zones.some((z) => z.name === zone.name)) throw httpError(409, "zone '" + zone.name + "' already exists");
+      state.zones.push({ name: zone.name, display_name: zone.display_name || zone.name, status: { phase: "Provisioning", apps: 0 } });
+      setTimeout(() => { const z = state.zones.find((x) => x.name === zone.name); if (z) z.status.phase = "Ready"; }, 2000);
+      return { ok: true };
+    },
+    deleteZone: (org, name) => {
+      if (state.apps.some((a) => a.zone_ref === name)) throw httpError(409, "zone has apps");
+      state.zones = state.zones.filter((z) => z.name !== name);
+      return { ok: true };
+    },
+    shipApp: (app) => {
+      if (!app.zone_ref) throw httpError(422, "zone_ref is required");
+      if (!["xs", "s", "m", "l"].includes(app.size)) throw httpError(422, "unknown size '" + app.size + "'");
+      if (state.apps.some((a) => a.name === app.app_name)) throw httpError(409, "app exists");
+      const a = mkApp(app.app_name, app.zone_ref, "Building", app.size, app.replicas || 1, {});
+      a.branch = app.branch || "main"; a.port = app.port || 8080;
+      a.repo_name = app.repo_name || ""; a.repo_url = app.repo_url || "";
+      a.public_url_enabled = app.public_url_enabled !== false;
+      a.name = app.app_name;
+      state.apps.push(a);
+      // walk it through the real phases so the city reacts
+      phaseWalk(a.name, ["Building", "Pushing", "Deploying", "Live"], 9000);
+      return { ok: true };
+    },
+    updateApp: (org, name, body) => {
+      const a = state.apps.find((x) => x.name === name);
+      if (!a) throw httpError(404, "no such app");
+      if (body.replicas !== undefined) a.replicas = body.replicas;
+      if (body.branch !== undefined) { a.branch = body.branch; phaseWalk(name, ["Building", "Pushing", "Deploying", "Live"], 7000); }
+      if (body.env !== undefined) a.env = body.env;
+      if (body.volume !== undefined) a.volume = body.volume && body.volume.size ? body.volume : null;
+      if (body.custom_domain !== undefined) a.custom_domain = body.custom_domain;
+      if (body.public_url_enabled !== undefined) a.public_url_enabled = body.public_url_enabled;
+      return { ok: true };
+    },
+    deleteApp: (org, name) => { state.apps = state.apps.filter((a) => a.name !== name); return { ok: true }; },
+    redeploy: (org, name) => { phaseWalk(name, ["Building", "Pushing", "Deploying", "Live"], 7000); return { ok: true }; },
+  };
+
+  function httpError(status, message) {
+    const e = new Error(message); e.status = status; return e;
+  }
+
+  function phaseWalk(name, phases, totalMs) {
+    phases.forEach((phase, i) => {
+      setTimeout(() => {
+        const a = state.apps.find((x) => x.name === name);
+        if (!a) return;
+        a.status.phase = phase;
+        if (phase === "Live") { a.status.url = "https://" + name + ".harness.example"; a.status.url_ready = true; }
+        pushAppEvent({ app: name, phase });
+      }, (totalMs / phases.length) * (i + 1));
+    });
+  }
+
+  // ---------------- postMessage plumbing ----------------
+  const streams = new Map(); // id -> {op, args, timer}
+
+  function pushAppEvent(evt) {
+    for (const [id, s] of streams) {
+      if (s.op === "appEvents") {
+        frame.contentWindow.postMessage({ type: "kontract-stream-event", id, event: "app", data: JSON.stringify(evt) }, "*");
+      }
+    }
+  }
+
+  window.addEventListener("message", (e) => {
+    const m = e.data;
+    if (!m || e.source !== frame.contentWindow) return;
+
+    if (m.type === "kontract-rpc") {
+      logOp(m.op, m.args);
+      const reply = (ok, dataOrErr, status) =>
+        frame.contentWindow.postMessage(
+          ok ? { type: "kontract-rpc-result", id: m.id, ok: true, data: dataOrErr }
+             : { type: "kontract-rpc-result", id: m.id, ok: false, error: dataOrErr, status },
+          "*"
+        );
+      if (failOps.has(m.op)) return reply(false, "harness: simulated failure for " + m.op, 500);
+      const h = handlers[m.op];
+      if (!h) return reply(false, "harness: unknown op " + m.op, 404);
+      try {
+        reply(true, h(...m.args));
+      } catch (err) {
+        reply(false, err.message, err.status || 500);
+      }
+    }
+
+    if (m.type === "kontract-stream-open") {
+      logOp(m.op + " [stream open]", m.args);
+      if (streams.size >= 3) {
+        frame.contentWindow.postMessage({ type: "kontract-stream-close", id: m.id, reason: "stream limit exceeded" }, "*");
+        return;
+      }
+      const s = { op: m.op, args: m.args, timer: null };
+      streams.set(m.id, s);
+      if (m.op === "logs") {
+        const name = m.args[1];
+        let n = 0;
+        s.timer = setInterval(() => {
+          n++;
+          frame.contentWindow.postMessage({
+            type: "kontract-stream-event", id: m.id, event: "log",
+            data: JSON.stringify({ pod: name + "-pod-1", time: new Date().toISOString(), line: `[harness] ${name} request #${n} served in ${(Math.random() * 40 + 2) | 0}ms` }),
+          }, "*");
+        }, 700);
+      }
+    }
+
+    if (m.type === "kontract-stream-close") {
+      const s = streams.get(m.id);
+      if (s) { if (s.timer) clearInterval(s.timer); streams.delete(m.id); logOp("stream closed by theme", [m.id]); }
+    }
+  });
+})();
+</script>
+</body>
+</html>

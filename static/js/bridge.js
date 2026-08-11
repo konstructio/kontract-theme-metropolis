@@ -1,0 +1,340 @@
+// The only module that touches the `kontract` const. Feeds the store from
+// the platform (polls + streams under a hard 3-stream budget) and exposes
+// every write action the wizards and inspector call. Nothing else in the
+// theme may talk to the platform.
+
+import { store } from "./store.js";
+import { friendlyError } from "./util.js";
+
+const APP_POLL_MS = 15000; // only when app-events is unavailable
+const RECONCILE_MS = 60000; // safety net even in push mode
+const ZONES_MS = 30000;
+const QUOTA_MS = 60000;
+const METRICS_TICK_MS = 20000; // metrics wheel: a few live apps per tick
+const METRICS_PER_TICK = 3;
+
+export function createBridge({ toast }) {
+  /* global kontract */
+  const org = new URLSearchParams(window.location.search).get("org") || "";
+
+  // ---------------- normalize ----------------
+  function normalizeApp(a, idx) {
+    const st = a.status || {};
+    const urlReady = "url_ready" in st ? !!st.url_ready : true;
+    return {
+      name: a.name,
+      app_name: a.app_name || a.name,
+      zone_ref: a.zone_ref || "",
+      phase: st.phase || "Building",
+      statusMessage: st.message || "",
+      url: urlReady ? st.url || "" : "",
+      urlPending: !!st.url && !urlReady,
+      public_url_enabled: !!a.public_url_enabled,
+      size: a.size || "",
+      replicas: a.replicas || 1,
+      branch: a.branch || "main",
+      repo_name: a.repo_name || "",
+      repo_url: a.repo_url || "",
+      port: a.port || 8080,
+      env: Array.isArray(a.env) ? a.env : [],
+      volume: a.volume && a.volume.size ? a.volume : null,
+      custom_domain: a.custom_domain || "",
+      domain_token: st.domain_token || "",
+      domain_verified: !!st.domain_verified,
+      // The API lists apps in a stable order; the index anchors lot
+      // assignment so buildings never trade places between refreshes.
+      created_at: idx,
+    };
+  }
+
+  function normalizeZone(z, idx) {
+    return {
+      name: z.name,
+      display_name: z.display_name || z.name,
+      created_at: idx,
+      status: z.status || {},
+    };
+  }
+
+  // ---------------- stream budget (hard max 3) ----------------
+  // Slot 1: appEvents (persistent). Slot 2: the one open logs stream.
+  // Slot 3 stays free so a close-then-reopen never overlaps past the cap.
+  let openCount = 0;
+  function guardedSubscribe(open) {
+    if (openCount >= 3) return null; // never trip the platform cap
+    openCount++;
+    let closed = false;
+    const unsub = open(() => {
+      // onClose from the platform side
+      if (!closed) {
+        closed = true;
+        openCount--;
+      }
+    });
+    return () => {
+      if (!closed) {
+        closed = true;
+        openCount--;
+        unsub();
+      }
+    };
+  }
+
+  // ---------------- refreshers ----------------
+  let appsBusy = false;
+  async function refreshApps() {
+    if (appsBusy) return;
+    appsBusy = true;
+    try {
+      const raw = (await kontract.apps(org)) || [];
+      store.update({ apps: raw.map(normalizeApp) });
+    } catch (e) {
+      console.warn("apps refresh failed:", e);
+    } finally {
+      appsBusy = false;
+    }
+  }
+
+  async function refreshZones() {
+    try {
+      const raw = (await kontract.zones(org)) || [];
+      store.update({ zones: raw.map(normalizeZone) });
+    } catch (e) {
+      console.warn("zones refresh failed:", e);
+    }
+  }
+
+  async function refreshQuota() {
+    const caps = store.state.platform.caps;
+    if (!caps.includes("quota")) return;
+    try {
+      store.update({ quota: await kontract.quota(org) });
+    } catch (e) {
+      console.warn("quota refresh failed:", e);
+    }
+  }
+
+  // metrics wheel — a few Live apps per tick so a big city never bursts
+  let wheelIdx = 0;
+  async function metricsTick() {
+    const caps = store.state.platform.caps;
+    if (!caps.includes("metrics")) return;
+    const live = store.state.apps.filter((a) => a.phase === "Live");
+    if (!live.length) return;
+    const batch = [];
+    for (let i = 0; i < Math.min(METRICS_PER_TICK, live.length); i++) {
+      batch.push(live[(wheelIdx + i) % live.length]);
+    }
+    wheelIdx = (wheelIdx + METRICS_PER_TICK) % live.length;
+
+    const metrics = { ...store.state.metrics };
+    await Promise.all(
+      batch.map(async (app) => {
+        try {
+          const res = await kontract.metrics(org, app.name, { range: "1h", step: "2m" });
+          const series = {};
+          for (const s of (res && res.series) || []) series[s.name] = s.points || [];
+          const limit = series.cpu_limit && series.cpu_limit.length
+            ? series.cpu_limit[series.cpu_limit.length - 1].v
+            : 0;
+          const pct = (p) => ({ t: p.t, v: limit > 0 ? (p.v / limit) * 100 : p.v * 100 });
+          metrics[app.name] = {
+            cpu: (series.cpu || []).map(pct),
+            mem: series.memory || [],
+            net: series.network_rx || series.network_tx || [],
+          };
+        } catch (_) {
+          /* metrics are decoration; skip quietly */
+        }
+      })
+    );
+    store.update({ metrics });
+  }
+
+  // ---------------- app sync: push if advertised, else poll ----------------
+  let pollTimer = null;
+  let eventsClose = null;
+  function startPolling() {
+    if (!pollTimer) pollTimer = setInterval(refreshApps, APP_POLL_MS);
+  }
+
+  function watchApps() {
+    if (typeof kontract.appEvents !== "function") return startPolling();
+    const closer = guardedSubscribe((onPlatformClose) =>
+      kontract.appEvents(
+        org,
+        () => refreshApps(),
+        (reason) => {
+          onPlatformClose();
+          eventsClose = null;
+          if (/unsupported/i.test(reason || "")) return startPolling();
+          setTimeout(watchApps, 5000);
+        }
+      )
+    );
+    if (!closer) return startPolling();
+    eventsClose = closer;
+    refreshApps();
+  }
+
+  // ---------------- runtime logs (slot 2) ----------------
+  let logsClose = null;
+  function openLogs(appName, onLine, onClosed) {
+    closeLogs();
+    const caps = store.state.platform.caps;
+    if (!caps.includes("runtime-logs")) {
+      onClosed("runtime logs not available on this platform");
+      return () => {};
+    }
+    const closer = guardedSubscribe((onPlatformClose) =>
+      kontract.logs(
+        org,
+        appName,
+        (payload) => {
+          if (payload && typeof payload === "object") {
+            const pod = payload.pod ? String(payload.pod).slice(-12) : "";
+            const line = payload.line != null ? String(payload.line) : JSON.stringify(payload);
+            onLine(pod ? `[${pod}] ${line}` : `◆ ${line}`);
+          } else {
+            onLine(String(payload));
+          }
+        },
+        (reason) => {
+          onPlatformClose();
+          logsClose = null;
+          onClosed(reason || "stream ended — reopen to resume");
+        }
+      )
+    );
+    if (!closer) {
+      onClosed("stream budget exhausted — close another panel first");
+      return () => {};
+    }
+    logsClose = closer;
+    return closeLogs;
+  }
+
+  function closeLogs() {
+    if (logsClose) {
+      logsClose();
+      logsClose = null;
+    }
+  }
+
+  // ---------------- writes (called by wizards/inspector, M6) ----------------
+  const actions = {
+    org: () => org,
+
+    async createZone(name, displayName) {
+      await kontract.createZone(org, { name, display_name: displayName });
+      setTimeout(refreshZones, 1500); // ship-it pattern: give the CR a beat
+      setTimeout(refreshQuota, 1600);
+    },
+
+    async deleteZone(name) {
+      await kontract.deleteZone(org, name);
+      setTimeout(refreshZones, 1200);
+    },
+
+    async shipApp(payload) {
+      // exact ship-it payload shape; namespace pinned to the launched org
+      await kontract.shipApp({ ...payload, namespace: org });
+      await refreshApps();
+      refreshQuota();
+    },
+
+    async updateApp(name, body) {
+      await kontract.updateApp(org, name, body);
+      await refreshApps();
+      refreshQuota();
+    },
+
+    async deleteApp(name) {
+      await kontract.deleteApp(org, name);
+      await refreshApps();
+      refreshQuota();
+    },
+
+    async redeploy(name) {
+      await kontract.redeploy(org, name);
+      await refreshApps();
+    },
+
+    buildLogs: (name) => kontract.buildLogs(org, name),
+    deployments: (name) => kontract.deployments(org, name),
+
+    async appRepos() {
+      try {
+        const repos = (await kontract.appRepos(org)) || [];
+        if (repos.length) return repos;
+      } catch (_) {
+        /* fall through to derivation */
+      }
+      // ship-it fallback: derive repos from existing apps; honest empty
+      // state if the org has never registered one
+      const seen = new Map();
+      for (const a of store.state.apps) {
+        if (a.repo_name && !seen.has(a.repo_name)) {
+          seen.set(a.repo_name, { repo_name: a.repo_name, repo_url: a.repo_url || "" });
+        }
+      }
+      return [...seen.values()];
+    },
+
+    character: () => kontract.character(org),
+    saveCharacter: (spec) => kontract.saveCharacter(org, spec),
+    openLogs,
+    closeLogs,
+    refreshApps,
+    refreshZones,
+    refreshQuota,
+  };
+
+  // ---------------- boot ----------------
+  async function boot() {
+    store.update({ launched: true, org });
+    let disc;
+    try {
+      disc = await kontract.discover(org);
+    } catch (e) {
+      toast("CITY OFFLINE", friendlyError(e), "error");
+      store.addTicker("error", `discovery failed: ${friendlyError(e)}`);
+      return actions;
+    }
+
+    const caps = disc.capabilities || [];
+    store.update({
+      platform: {
+        caps,
+        sizes: disc.app_sizes || [],
+        rates: disc.rates || null,
+        regions: [],
+        bands: disc.bands || null,
+      },
+      org: (disc.org && disc.org.name) || org,
+    });
+
+    await Promise.all([refreshZones(), refreshApps()]);
+    refreshQuota();
+    metricsTick();
+
+    if (typeof kontract.regions === "function") {
+      kontract.regions(org).then(
+        (r) => store.update({ platform: { ...store.state.platform, regions: r || [] } }),
+        () => {}
+      );
+    }
+
+    if (caps.includes("app-events")) watchApps();
+    else startPolling();
+    setInterval(refreshApps, RECONCILE_MS); // truth wins even in push mode
+    setInterval(refreshZones, ZONES_MS);
+    setInterval(refreshQuota, QUOTA_MS);
+    setInterval(metricsTick, METRICS_TICK_MS);
+
+    store.addTicker("info", `Welcome back, Mayor — ${store.state.org} is on the map.`);
+    return actions;
+  }
+
+  return { boot, actions };
+}
