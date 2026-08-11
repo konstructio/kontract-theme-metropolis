@@ -49,6 +49,23 @@ export function pick(rng, arr) {
   return arr[Math.floor(rng() * arr.length)];
 }
 
+// DOM builder — children are appended as nodes, strings become text nodes
+// (never markup), so API-derived values are inert by construction.
+export function el(tag, attrs = {}, ...children) {
+  const node = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") node.className = v;
+    else if (k === "dataset") Object.assign(node.dataset, v);
+    else if (k.startsWith("on") && typeof v === "function") node.addEventListener(k.slice(2), v);
+    else if (v !== undefined && v !== null) node.setAttribute(k, v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined) continue;
+    node.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return node;
+}
+
 // Platform errors are surfaced honestly; this only adds the city's voice.
 export function friendlyError(e) {
   const msg = e && e.message ? String(e.message) : "request failed";

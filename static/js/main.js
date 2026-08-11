@@ -47,6 +47,9 @@ async function boot() {
     { createParticles },
     { createAmbient },
     { createEffects },
+    { createPicking },
+    { createHud },
+    { createInspector },
   ] = await Promise.all([
     import("./engine/scene.js"),
     import("./engine/daynight.js"),
@@ -58,6 +61,9 @@ async function boot() {
     import("./engine/particles.js"),
     import("./engine/ambient.js"),
     import("./engine/effects.js"),
+    import("./engine/picking.js"),
+    import("./ui/hud.js"),
+    import("./ui/inspector.js"),
   ]);
 
   const engine = createEngine({
@@ -96,8 +102,18 @@ async function boot() {
     }
   });
 
+  createPicking(engine, layout, store);
+  createInspector(store, layout);
+  const hud = createHud(store, {
+    dayNight,
+    effects,
+    onSelectApp: (name) => store.update({ selection: { type: "app", id: name } }),
+  });
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") effects.skip();
+    if (e.key === "Escape") {
+      effects.skip();
+      store.update({ selection: null });
+    }
   });
 
   engine.onFrame((dt) => {
