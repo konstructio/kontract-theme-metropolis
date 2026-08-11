@@ -62,9 +62,17 @@ export function createRoadNetwork(scene) {
       group.add(spoke);
       spokes.set(d.name, spoke);
 
-      // Out-and-back lane for the spoke.
-      const out = [from.clone().setY(0.12), to.clone().setY(0.12)];
-      lanePaths.push({ points: out, loop: false });
+      // Two offset lanes so opposing traffic doesn't drive through itself.
+      const dir = to.clone().sub(from).normalize();
+      const side = new THREE.Vector3(-dir.z, 0, dir.x).multiplyScalar(1.2);
+      lanePaths.push({
+        points: [from.clone().add(side).setY(0.12), to.clone().add(side).setY(0.12)],
+        loop: false,
+      });
+      lanePaths.push({
+        points: [to.clone().sub(side).setY(0.12), from.clone().sub(side).setY(0.12)],
+        loop: false,
+      });
     }
     // Roads accrete with the city; a deleted district keeps its spoke —
     // the working view removes buildings, the streets stay (they're real

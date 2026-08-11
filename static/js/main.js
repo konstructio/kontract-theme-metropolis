@@ -196,6 +196,16 @@ async function boot() {
   });
 
   engine.start();
+
+  // dev-only introspection (?debug=1): renderer stats for perf audits
+  if (new URLSearchParams(window.location.search).get("debug") === "1") {
+    window.__metroDebug = () => ({
+      calls: engine.renderer.info.render.calls,
+      triangles: engine.renderer.info.render.triangles,
+      geometries: engine.renderer.info.memory.geometries,
+      textures: engine.renderer.info.memory.textures,
+    });
+  }
 }
 
 boot();

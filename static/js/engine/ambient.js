@@ -6,10 +6,12 @@
 import * as THREE from "three";
 import { appVibe } from "../store.js";
 import { mulberry32 } from "../util.js";
+import { makeStreetlight } from "../city/props.js";
 
 const MAX_CARS = 150;
 const MAX_PEDS = 120;
 const MAX_FIRE_LIGHTS = 4;
+const MAX_WINDOWS = 5200;
 
 const CAR_COLORS = [0xd94f30, 0x3a76c4, 0xe0b83a, 0x74b06a, 0xb8b2a4, 0x513f8a, 0x39c0c8];
 
@@ -210,6 +212,86 @@ export function createAmbient(scene, roads, layout, particles) {
     }
   }
 
+  // ---------- window lights (one instanced draw for the whole city) ----------
+  // Each building gets a sampled grid of window quads on its four faces;
+  // at night their on-probability and warmth scale with real CPU.
+  const winGeo = new THREE.PlaneGeometry(0.5, 0.62);
+  const winMat = new THREE.MeshBasicMaterial({ vertexColors: false });
+  const windows = new THREE.InstancedMesh(winGeo, winMat, MAX_WINDOWS);
+  windows.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  windows.count = 0;
+  scene.add(windows);
+  const winMeta = []; // {cpu01} per instance
+  const winColor = new THREE.Color();
+  let windowsNight = null; // last night flag applied
+
+  function rebuildWindows(state) {
+    const wDummy = new THREE.Object3D();
+    let idx = 0;
+    const FLOOR_H = 1.15;
+    for (const app of state.apps) {
+      const b = layout.buildingOf(app.name);
+      if (!b || b.group.userData.construction) continue;
+      const vibe = appVibe(app, state.metrics);
+      const world = new THREE.Vector3();
+      b.group.getWorldPosition(world);
+      const topY = b.group.userData.topY || 6;
+      const half = (b.group.userData.footprint || 5) / 2 + 0.03;
+      const floors = Math.min(10, Math.max(2, Math.round(topY / FLOOR_H) - 1));
+      const rowStep = (topY - 1.2) / floors;
+      for (let f = 0; f < floors && idx < MAX_WINDOWS; f++) {
+        const y = world.y + 1 + f * rowStep;
+        for (const [nx, nz, rot] of [[0, 1, 0], [0, -1, Math.PI], [1, 0, Math.PI / 2], [-1, 0, -Math.PI / 2]]) {
+          for (let c = -1; c <= 1 && idx < MAX_WINDOWS; c += 2) {
+            wDummy.position.set(
+              world.x + nx * half + (nz !== 0 ? c * half * 0.45 : 0),
+              y,
+              world.z + nz * half + (nx !== 0 ? c * half * 0.45 : 0)
+            );
+            wDummy.rotation.set(0, rot, 0);
+            wDummy.updateMatrix();
+            windows.setMatrixAt(idx, wDummy.matrix);
+            winMeta[idx] = { cpu01: vibe.cpu01, seed: (idx * 2654435761) % 997 / 997 };
+            idx++;
+          }
+        }
+      }
+    }
+    windows.count = idx;
+    windows.instanceMatrix.needsUpdate = true;
+    windowsNight = null; // force recolor
+  }
+
+  function recolorWindows(isNight) {
+    for (let i = 0; i < windows.count; i++) {
+      const m = winMeta[i] || { cpu01: 0, seed: 0.5 };
+      const pOn = isNight ? 0.3 + m.cpu01 * 0.65 : 0.02;
+      if (m.seed < pOn) {
+        winColor.setHSL(0.1 + m.seed * 0.04, 0.85, isNight ? 0.62 : 0.5);
+      } else {
+        winColor.setHex(isNight ? 0x0d1118 : 0x2a3138);
+      }
+      windows.setColorAt(i, winColor);
+    }
+    if (windows.instanceColor) windows.instanceColor.needsUpdate = true;
+    windowsNight = isNight;
+  }
+
+  // ---------- streetlights around the ring + district corners ----------
+  const lampHeads = [];
+  {
+    for (let i = 0; i < 14; i++) {
+      const a = (i / 14) * Math.PI * 2;
+      const lamp = makeStreetlight();
+      lamp.position.set(Math.cos(a) * (roads.RING_RADIUS + 4.5), 0, Math.sin(a) * (roads.RING_RADIUS + 4.5));
+      lamp.rotation.y = -a + Math.PI;
+      scene.add(lamp);
+    }
+    scene.traverse((o) => {
+      if (o.name === "lamp-head") lampHeads.push(o);
+    });
+  }
+
   // ---------- night dressing ----------
   const blinkTips = [];
   function collectBlinkers() {
@@ -257,13 +339,17 @@ export function createAmbient(scene, roads, layout, particles) {
     }
     if (pedState.length) peds.instanceMatrix.needsUpdate = true;
 
-    // fire flicker + antenna blink + fountain shimmer
+    // fire flicker + antenna blink + fountain shimmer + night lighting
     for (const light of fireLights.values()) {
       light.intensity = 22 + Math.sin(t * 17 + light.position.x) * 9 + Math.random() * 5;
     }
     const blinkOn = isNight && Math.sin(t * 2.4) > 0;
     for (const tip of blinkTips) {
       tip.material.color.setHex(blinkOn ? 0xff4d4d : 0x551515);
+    }
+    if (windowsNight !== isNight) {
+      recolorWindows(isNight);
+      for (const head of lampHeads) head.material.color.setHex(isNight ? 0xffd77a : 0x333322);
     }
     if (!fountainWater) fountainWater = scene.getObjectByName("fountain-water");
     if (fountainWater) fountainWater.position.y = 0.55 + Math.sin(t * 2) * 0.03;
@@ -276,6 +362,7 @@ export function createAmbient(scene, roads, layout, particles) {
     syncPedestrians(state);
     syncSmoke(state);
     collectBlinkers();
+    rebuildWindows(state);
   }
 
   return { update, sync, setTaxiMode };

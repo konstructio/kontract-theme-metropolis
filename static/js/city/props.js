@@ -38,6 +38,26 @@ export function makeTree(rng) {
   return g;
 }
 
+// Streetlight pole; the head mesh is named so ambient.js can light it at
+// night without any real PointLight cost.
+export function makeStreetlight() {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 3.4, 6), lambert(0x4c545c));
+  pole.position.y = 1.7;
+  g.add(pole);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.08), lambert(0x4c545c));
+  arm.position.set(0.4, 3.35, 0);
+  g.add(arm);
+  const head = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16, 8, 8),
+    new THREE.MeshBasicMaterial({ color: 0x333322 })
+  );
+  head.name = "lamp-head";
+  head.position.set(0.82, 3.3, 0);
+  g.add(head);
+  return g;
+}
+
 // The civic plaza at the city's origin: City Hall (shop), the Mayor's
 // statue (character screen), and a fountain. Click targets carry userData.
 export function createPlaza(scene) {
