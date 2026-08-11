@@ -66,6 +66,24 @@ export function el(tag, attrs = {}, ...children) {
   return node;
 }
 
+// "250m" → 0.25 cores, "2" → 2 cores
+export function parseCpu(s) {
+  const str = String(s || "").trim();
+  if (!str) return 0;
+  if (str.endsWith("m")) return (parseFloat(str) || 0) / 1000;
+  return parseFloat(str) || 0;
+}
+
+// "256Mi" → 0.25 GiB, "1Gi" → 1, "512M" ≈ 0.5
+export function parseMemGi(s) {
+  const str = String(s || "").trim();
+  const n = parseFloat(str) || 0;
+  if (/Gi?$/i.test(str)) return n;
+  if (/Mi?$/i.test(str)) return n / 1024;
+  if (/Ki?$/i.test(str)) return n / (1024 * 1024);
+  return n;
+}
+
 // Platform errors are surfaced honestly; this only adds the city's voice.
 export function friendlyError(e) {
   const msg = e && e.message ? String(e.message) : "request failed";

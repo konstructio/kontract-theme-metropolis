@@ -103,7 +103,6 @@ async function boot() {
   });
 
   createPicking(engine, layout, store);
-  createInspector(store, layout);
   const hud = createHud(store, {
     dayNight,
     effects,
@@ -122,16 +121,19 @@ async function boot() {
     effects.update(dt);
   });
 
-  let bridgeActions = null;
+  let actions = null;
   if (launched) {
     const { createBridge } = await import("./bridge.js");
     const bridge = createBridge({ toast: hud.showToast });
-    bridgeActions = await bridge.boot();
+    actions = await bridge.boot();
   } else {
     store.update(sampleSnapshot());
     startSampleTimeline(store);
   }
-  void bridgeActions; // wizards/inspector wire onto this in M6
+
+  const { createWizards } = await import("./ui/wizards.js");
+  const wizards = createWizards(store, actions, hud, effects);
+  createInspector(store, layout, { actions, wizards, hud });
 
   // The sun only needs a real-time nudge now and then, not every frame.
   let skyAccum = 0;
