@@ -157,13 +157,17 @@ export function createBridge({ toast }) {
           const res = await kontract.metrics(org, app.name, { range: "1h", step: "2m" });
           const series = {};
           for (const s of (res && res.series) || []) series[s.name] = s.points || [];
-          const limit = series.cpu_limit && series.cpu_limit.length
-            ? series.cpu_limit[series.cpu_limit.length - 1].v
-            : 0;
-          const pct = (p) => ({ t: p.t, v: limit > 0 ? (p.v / limit) * 100 : p.v * 100 });
+          const lastOf = (s) => (s && s.length ? s[s.length - 1].v : 0);
+          const cpuLimit = lastOf(series.cpu_limit);
+          const memLimit = lastOf(series.memory_limit);
+          const cpuPct = (p) => ({ t: p.t, v: cpuLimit > 0 ? (p.v / cpuLimit) * 100 : p.v * 100 });
+          const memPct = (p) => ({ t: p.t, v: memLimit > 0 ? (p.v / memLimit) * 100 : p.v });
           metrics[app.name] = {
-            cpu: (series.cpu || []).map(pct),
-            mem: series.memory || [],
+            cpu: (series.cpu || []).map(cpuPct),
+            // memory as % of limit when the limit series exists (it does on
+            // the platform); raw bytes otherwise — meters normalize either way
+            mem: (series.memory || []).map(memPct),
+            memIsPct: memLimit > 0,
             net: series.network_rx || series.network_tx || [],
           };
           okThisTick++;

@@ -120,12 +120,16 @@ export function createBuilding(app, sizeIndex, districtHue) {
   let mainW = 4.6 + rng() * 1.6;
   let mainD = 4.6 + rng() * 1.6;
   let topY = 0;
+  // where a rooftop gauge cluster can stand ON the actual roof — the top
+  // tier differs per archetype, so the generator records it
+  let meterAnchor = null; // [x, y, z] local
 
   if (archetype === "slab") {
     mainW += 2.6;
     const body = towerBody(rng, material, Math.max(3, floors - 2), mainW, mainD);
     body.parts.forEach((p) => group.add(p));
     topY = body.topY;
+    meterAnchor = [-mainW / 2 + 0.9, topY, -mainD / 2 + 0.9];
   } else if (archetype === "setback") {
     // wedding-cake: 2-3 tiers shrinking as they rise
     const tiers = 2 + (rng() < 0.5 ? 1 : 0);
@@ -133,14 +137,17 @@ export function createBuilding(app, sizeIndex, districtHue) {
     let d = mainD + 1.6;
     let y = 0;
     const per = Math.max(2, Math.floor(floors / tiers));
+    let lastW = w;
     for (let t = 0; t < tiers; t++) {
       const h = per * FLOOR_H;
       group.add(box(w, h, d, material, 0, y, 0));
       y += h;
+      lastW = w;
       w *= 0.72;
       d *= 0.72;
     }
     topY = y;
+    meterAnchor = [0, topY, 0]; // top tier is centered
   } else if (archetype === "twin") {
     const h = Math.max(3, floors - 1) * FLOOR_H;
     const w = mainW * 0.62;
@@ -148,10 +155,12 @@ export function createBuilding(app, sizeIndex, districtHue) {
     group.add(box(w, h, mainD * 0.7, material, w * 0.75, 0, 0));
     group.add(box(mainW * 1.9, FLOOR_H * 1.6, mainD * 0.85, material, 0, 0, 0)); // podium
     topY = h;
+    meterAnchor = [w * 0.75, topY, 0]; // atop the east tower
   } else {
     const body = towerBody(rng, material, floors, mainW, mainD);
     body.parts.forEach((p) => group.add(p));
     topY = body.topY;
+    meterAnchor = [-mainW / 2 + 0.9, topY, -mainD / 2 + 0.9];
   }
 
   roofProps(rng, group, topY, mainW, mainD, material);
@@ -177,7 +186,7 @@ export function createBuilding(app, sizeIndex, districtHue) {
     }
   }
 
-  group.userData = { kind: "building", app: app.name, topY, footprint: Math.max(mainW, mainD) };
+  group.userData = { kind: "building", app: app.name, topY, footprint: Math.max(mainW, mainD), meterAnchor };
   group.traverse((o) => {
     if (o.isMesh) o.userData = group.userData;
   });

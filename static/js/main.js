@@ -79,6 +79,8 @@ async function boot() {
   const particles = createParticles(engine.scene);
   const ambient = createAmbient(engine.scene, roads, layout, particles);
   const effects = createEffects(engine.scene, layout, particles, store);
+  const { createMeters } = await import("./engine/meters.js");
+  const meters = createMeters(engine.scene, layout, store);
 
   // Celebrate a build finishing: under-construction → Live throws fireworks.
   const lastPhase = new Map();
@@ -87,6 +89,7 @@ async function boot() {
       layout.reconcile(state);
       effects.sync(state);
       ambient.sync(state);
+      meters.sync(state);
       for (const app of state.apps) {
         const prev = lastPhase.get(app.name);
         if (
@@ -100,6 +103,7 @@ async function boot() {
       }
     } else if (keys.has("metrics")) {
       ambient.sync(state);
+      meters.sync(state);
     }
   });
 
@@ -135,6 +139,7 @@ async function boot() {
     particles.update(dt);
     ambient.update(dt, dayNight.isNight());
     effects.update(dt);
+    meters.update(dt);
   });
 
   let actions = null;
