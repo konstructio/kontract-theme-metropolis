@@ -44,6 +44,9 @@ async function boot() {
     { createCityLayout },
     { store },
     { sampleSnapshot, startSampleTimeline },
+    { createParticles },
+    { createAmbient },
+    { createEffects },
   ] = await Promise.all([
     import("./engine/scene.js"),
     import("./engine/daynight.js"),
@@ -52,6 +55,9 @@ async function boot() {
     import("./city/layout.js"),
     import("./store.js"),
     import("./sample-data.js"),
+    import("./engine/particles.js"),
+    import("./engine/ambient.js"),
+    import("./engine/effects.js"),
   ]);
 
   const engine = createEngine({
@@ -64,11 +70,40 @@ async function boot() {
   const roads = createRoadNetwork(engine.scene);
   const layout = createCityLayout(engine.scene, roads);
   const dayNight = createDayNight(engine.scene);
+  const particles = createParticles(engine.scene);
+  const ambient = createAmbient(engine.scene, roads, layout, particles);
+  const effects = createEffects(engine.scene, layout, particles, store);
 
+  // Celebrate a build finishing: under-construction → Live throws fireworks.
+  const lastPhase = new Map();
   store.subscribe((state, keys) => {
     if (keys.has("zones") || keys.has("apps") || keys.has("platform")) {
       layout.reconcile(state);
+      effects.sync(state);
+      ambient.sync(state);
+      for (const app of state.apps) {
+        const prev = lastPhase.get(app.name);
+        if (
+          app.phase === "Live" &&
+          (prev === "Building" || prev === "Pushing" || prev === "Deploying")
+        ) {
+          effects.celebrate(app.name, { friday: new Date().getDay() === 5 });
+        }
+        lastPhase.set(app.name, app.phase);
+      }
+    } else if (keys.has("metrics")) {
+      ambient.sync(state);
     }
+  });
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") effects.skip();
+  });
+
+  engine.onFrame((dt) => {
+    particles.update(dt);
+    ambient.update(dt, dayNight.isNight());
+    effects.update(dt);
   });
 
   if (launched) {

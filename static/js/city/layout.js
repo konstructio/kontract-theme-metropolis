@@ -5,8 +5,13 @@
 
 import * as THREE from "three";
 import { fnv1a, mulberry32 } from "../util.js";
-import { createBuilding } from "./buildings.js";
+import { createBuilding, createConstructionSite } from "./buildings.js";
 import { makeTree } from "./props.js";
+
+const UNDER_CONSTRUCTION = new Set(["Building", "Pushing", "Deploying"]);
+// Where the displayed build progress starts per phase; effects.js animates
+// it forward from here, honestly capped below "complete" until Live.
+export const PHASE_PROGRESS = { Building: 0.3, Pushing: 0.62, Deploying: 0.85 };
 
 const GOLDEN = 2.399963229728653;
 const LOT = 13; // lot pitch (building pad + street margin)
@@ -134,12 +139,22 @@ export function createCityLayout(scene, roads) {
     );
   }
 
+  const progress = new Map(); // appName -> displayed 0..1 (quantized 1/8)
+  let lastState = null;
+
+  function quantized(app) {
+    const q = progress.get(app.name) ?? PHASE_PROGRESS[app.phase] ?? 0.3;
+    return Math.round(q * 8) / 8;
+  }
+
   // A building's visual identity beyond its seed: rebuild when these change.
   function buildingRev(app, sizeIndex) {
+    if (UNDER_CONSTRUCTION.has(app.phase)) return `C${quantized(app)}|${sizeIndex}|${app.replicas}`;
     return `${sizeIndex}|${app.replicas}|${app.phase === "Failed" ? "F" : "-"}`;
   }
 
   function reconcile(state) {
+    lastState = state;
     const zones = [...state.zones].sort(
       (a, b) => (a.created_at || 0) - (b.created_at || 0) || String(a.name).localeCompare(String(b.name))
     );
@@ -171,7 +186,9 @@ export function createCityLayout(scene, roads) {
         disposeGroup(existing.group);
       }
 
-      const group = createBuilding(app, sizeIndex, d.hue);
+      const group = UNDER_CONSTRUCTION.has(app.phase)
+        ? createConstructionSite(app, sizeIndex, d.hue, quantized(app))
+        : createBuilding(app, sizeIndex, d.hue);
       group.position.copy(lotPosition(lotIdx));
       d.group.add(group);
       buildings.set(app.name, { group, zone: app.zone_ref, lotIdx, rev });
@@ -226,11 +243,26 @@ export function createCityLayout(scene, roads) {
     });
   }
 
+  // effects.js drives displayed construction progress; a change that
+  // crosses a 1/8 step re-renders just that one building.
+  function setConstructionProgress(appName, value) {
+    const before = progress.get(appName);
+    progress.set(appName, value);
+    if (!lastState) return false;
+    const app = lastState.apps.find((a) => a.name === appName);
+    if (!app || !UNDER_CONSTRUCTION.has(app.phase)) return false;
+    const stepChanged = before === undefined || Math.round(before * 8) !== Math.round(value * 8);
+    if (stepChanged) reconcile(lastState);
+    return stepChanged;
+  }
+
   return {
     reconcile,
     districts,
     buildings,
     districtOf: (zoneName) => districts.get(zoneName),
     buildingOf: (appName) => buildings.get(appName),
+    setConstructionProgress,
+    clearProgress: (appName) => progress.delete(appName),
   };
 }

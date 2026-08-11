@@ -99,6 +99,32 @@ function sampleMetrics() {
   };
 }
 
-// M3 replaces this stub with the scripted timeline (a building cycling
-// Building → Live so cranes and the ship moment demo themselves).
-export function startSampleTimeline() {}
+// Scripted timeline: smelter-api cycles Building → Pushing → Deploying →
+// Live forever, so cranes, scaffolding and the ship moment demonstrate
+// themselves to anyone watching the sample city.
+export function startSampleTimeline(store) {
+  const seq = [
+    ["Building", 24000],
+    ["Pushing", 14000],
+    ["Deploying", 12000],
+    ["Live", 38000],
+  ];
+  let i = 0;
+
+  const advance = () => {
+    const [phase, dur] = seq[i];
+    const apps = store.state.apps.map((a) =>
+      a.name === "smelter-api" ? { ...a, phase, statusMessage: "" } : a
+    );
+    store.update({ apps });
+    store.addTicker("sample", `[SAMPLE] smelter-api — ${phase}`);
+    i = (i + 1) % seq.length;
+    setTimeout(advance, dur);
+  };
+  setTimeout(advance, 9000);
+
+  // gentle metric drift so window lights, smog and traffic breathe
+  setInterval(() => {
+    store.update({ metrics: sampleMetrics() });
+  }, 30000);
+}

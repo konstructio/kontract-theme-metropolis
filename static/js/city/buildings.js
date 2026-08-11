@@ -183,3 +183,116 @@ export function createBuilding(app, sizeIndex, districtHue) {
   });
   return group;
 }
+
+// A building mid-construction: the tower risen to `progress01` of its final
+// height, wrapped in scaffolding, with a working crane alongside. Same seed
+// as the finished building so the emerging tower matches what it becomes.
+export function createConstructionSite(app, sizeIndex, districtHue, progress01) {
+  const rng = mulberry32(buildingSeed(app));
+  const group = new THREE.Group();
+  group.name = `construction:${app.name}`;
+
+  const material = facadeMaterial(rng, districtHue);
+  pick(rng, ARCHETYPES); // consume the archetype roll to stay seed-aligned
+  const floors = floorsFor(app, sizeIndex, rng);
+  const targetH = floors * FLOOR_H;
+  const risenFloors = Math.max(1, Math.round(floors * clamp(progress01, 0, 1)));
+  const h = risenFloors * FLOOR_H;
+
+  const w = 4.9;
+  const d = 4.9;
+
+  // ground works: pad + material stacks
+  const pad = new THREE.Mesh(
+    new THREE.BoxGeometry(w + 4.5, 0.18, d + 4.5),
+    new THREE.MeshLambertMaterial({ color: 0x9d9483 })
+  );
+  pad.position.y = 0.09;
+  pad.receiveShadow = true;
+  group.add(pad);
+  for (let i = 0; i < 3; i++) {
+    const stack = new THREE.Mesh(
+      new THREE.BoxGeometry(1.2, 0.5, 0.8),
+      new THREE.MeshLambertMaterial({ color: i === 0 ? 0xb06a2f : 0x8a939b })
+    );
+    stack.position.set(w / 2 + 1.6, 0.35 + 0, d / 2 - i * 1.1);
+    group.add(stack);
+  }
+
+  // the rising tower
+  const body = box(w, h, d, material, 0, 0, 0);
+  group.add(body);
+
+  // scaffolding: edge lattice one floor taller than the risen structure
+  const scafH = Math.min(targetH, h + FLOOR_H * 1.5);
+  const scafGeo = new THREE.BoxGeometry(w + 0.7, scafH, d + 0.7);
+  const edges = new THREE.LineSegments(
+    new THREE.EdgesGeometry(scafGeo),
+    new THREE.LineBasicMaterial({ color: 0xd9a441 })
+  );
+  edges.position.y = scafH / 2;
+  group.add(edges);
+  // horizontal scaffold rings each floor
+  for (let f = 1; f <= risenFloors + 1 && f * FLOOR_H <= scafH; f += 2) {
+    const ring = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(w + 0.7, 0.01, d + 0.7)),
+      new THREE.LineBasicMaterial({ color: 0xd9a441 })
+    );
+    ring.position.y = f * FLOOR_H;
+    group.add(ring);
+  }
+
+  // the crane: mast beside the pad, jib overhead — parts named for animation
+  const crane = new THREE.Group();
+  crane.name = "crane";
+  const steel = new THREE.MeshLambertMaterial({ color: 0xe0b83a });
+  const mastH = targetH + 6;
+  const mast = new THREE.Mesh(new THREE.BoxGeometry(0.55, mastH, 0.55), steel);
+  mast.position.y = mastH / 2;
+  mast.castShadow = true;
+  crane.add(mast);
+
+  const pivot = new THREE.Group();
+  pivot.name = "crane-pivot";
+  pivot.position.y = mastH;
+  const jib = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 9.5), steel);
+  jib.position.z = 3.6;
+  crane.userData.jibLen = 9.5;
+  pivot.add(jib);
+  const counter = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 2.4), steel);
+  counter.position.z = -2.2;
+  pivot.add(counter);
+  const weight = new THREE.Mesh(
+    new THREE.BoxGeometry(0.9, 1.1, 0.7),
+    new THREE.MeshLambertMaterial({ color: 0x6b7076 })
+  );
+  weight.position.set(0, -0.7, -3.1);
+  pivot.add(weight);
+
+  const hook = new THREE.Group();
+  hook.name = "crane-hook";
+  hook.position.set(0, -0.2, 7.6);
+  const cable = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 5, 4), new THREE.MeshBasicMaterial({ color: 0x333333 }));
+  cable.position.y = -2.5;
+  hook.add(cable);
+  const beam = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.22, 0.3), new THREE.MeshLambertMaterial({ color: 0xb06a2f }));
+  beam.position.y = -5;
+  hook.add(beam);
+  pivot.add(hook);
+  crane.add(pivot);
+
+  crane.position.set(w / 2 + 2.6, 0, -(d / 2 + 2.6));
+  group.add(crane);
+
+  group.userData = {
+    kind: "building",
+    app: app.name,
+    topY: h,
+    footprint: w,
+    construction: true,
+  };
+  group.traverse((o) => {
+    if (o.isMesh || o.isLineSegments) o.userData = group.userData;
+  });
+  return group;
+}
