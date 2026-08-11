@@ -1,0 +1,79 @@
+/* Metropolis — HUD chrome over the 3D city. Dark #10161d, golden-hour accents. */
+
+:root {
+  --ink: #10161d;
+  --ink-2: #1a2230;
+  --paper: #f3f5f7;
+  --gold: #f5a623;
+  --ember: #ff7847;
+  --teal: #39c0c8;
+  --danger: #ff4d4d;
+  --hud-radius: 10px;
+  --hud-border: 1px solid rgba(243, 245, 247, 0.14);
+  --hud-bg: rgba(16, 22, 29, 0.86);
+  font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--ink);
+  color: var(--paper);
+}
+
+#stage, #canvas-root, #canvas-root canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#labels-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none; /* children opt back in */
+  display: flex;
+  flex-direction: column;
+}
+
+#hud > * { pointer-events: auto; }
+
+/* ---- standalone sample banner (honest, always visible when standalone) ---- */
+#sample-banner {
+  width: 100%;
+  background: linear-gradient(90deg, var(--ember), var(--gold));
+  color: var(--ink);
+  font-weight: 700;
+  text-align: center;
+  padding: 8px 14px;
+  letter-spacing: 0.02em;
+}
+#sample-banner[hidden] { display: none; }
+
+/* ---- WebGL fallback: truthful DOM city directory ---- */
+#fallback {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  background: var(--ink);
+  padding: 24px;
+}
+#fallback[hidden] { display: none; }
+
+#toast-stack {
+  position: absolute;
+  top: 56px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}

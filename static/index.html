@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <title>Metropolis</title>
+  <link rel="icon" href="./kontract-icon.svg" type="image/svg+xml" />
+  <link rel="icon" href="./kontract-icon.png" type="image/png" sizes="64x64" />
+  <link rel="stylesheet" href="./styles.css" />
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.min.js",
+        "three/addons/": "./vendor/addons/"
+      }
+    }
+  </script>
+  <!-- kontract.js is a classic script: it defines the top-level `kontract`
+       const that module code reads as a bare identifier (NOT window.kontract). -->
+  <script src="./kontract.js"></script>
+</head>
+<body>
+  <div id="stage">
+    <div id="canvas-root"></div>
+    <div id="labels-root" aria-hidden="true"></div>
+  </div>
+
+  <div id="hud">
+    <div id="sample-banner" hidden></div>
+    <header id="hud-top"></header>
+    <aside id="hud-right"></aside>
+    <footer id="hud-bottom"></footer>
+    <div id="panel-root"></div>
+    <div id="modal-root"></div>
+    <div id="toast-stack"></div>
+  </div>
+
+  <div id="fallback" hidden></div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>

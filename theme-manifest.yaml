@@ -1,0 +1,114 @@
+kontractTheme: v1
+meta:
+  name: metropolis
+  displayName: "Metropolis"
+  contract: v2
+  profile: game
+  capabilities: [apps, zones, shop, character, universe, quota, runtime-logs, app-events, volumes, custom-domains, metrics]
+metaphor:
+  premise: >
+    You are the Mayor. Your org is a living low-poly city: districts are zones,
+    buildings are apps, and every real ship raises another tower on a skyline
+    that only ever grows — golden hour to neon night, in real local time.
+  aesthetic:
+    style: vector-flat
+    palette: ["#10161d", "#f5a623", "#ff7847", "#39c0c8", "#f3f5f7"]
+    motion: "ambient and continuous — traffic, cranes, drifting smoke; UI snappy under 300ms; the fireworks are the one lingering beat"
+  branding:
+    references: ["Civo", "Konstruct"]
+    tone: "city-hall optimism, planning-department in-jokes, golden-hour postcards"
+vocabulary:
+  zone:   { singular: district, plural: districts, verb: claim }
+  app:    { singular: building, plural: buildings, verb: construct }
+  deploy: { verb: construct }
+  shop:     { name: "City Hall" }
+  universe: { name: "Metro Map" }
+  quota:  { name: "Power Grid" }
+  logs:   { name: "City Wire" }
+  volume: { singular: "basement warehouse", verb: attach }
+  domain: { singular: "street address", verb: register }
+zones:
+  metaphor: district
+  tiers:
+    small:  { name: "Neighborhood",   fits: "a few storefronts" }
+    medium: { name: "Borough",        fits: "a proper skyline block" }
+    large:  { name: "Downtown Core",  fits: "the full skyline" }
+  upgradeNarrative: "rezoning"
+apps:
+  metaphor: building
+  phaseWords:
+    Building:  "UNDER CONSTRUCTION"
+    Pushing:   "TOPPING OUT"
+    Deploying: "FINAL INSPECTION"
+    Live:      "OPEN FOR BUSINESS"
+    Failed:    "THREE-ALARM FIRE"
+shipMoment:
+  description: >
+    The crane sets the last beam, scaffolding falls away, windows flare to
+    life floor by floor, and fireworks burst over the skyline while the
+    city clock swings to golden hour for a beat.
+  durationSeconds: 6
+  skippable: true
+  blocking: false
+  fridayVariant: "Friday Festival — double fireworks, sweeping searchlights, a SHIPPED ON A FRIDAY banner, bonus XP."
+character:
+  enabled: true
+  archetype: "the Mayor"
+  naming: { default: "Mayor", playerNamed: true }
+  slots: [hat, suit, sash, gadget, statue]
+  cosmetics:
+    - { key: metropolis.hat.hardhat,   slot: hat,    name: "Gold Hardhat",        source: free }
+    - { key: metropolis.hat.tophat,    slot: hat,    name: "Founder's Top Hat",   source: level }
+    - { key: metropolis.suit.golden,   slot: suit,   name: "Golden Hour Suit",    source: level }
+    - { key: metropolis.sash.ribbon,   slot: sash,   name: "Ribbon-Cutting Sash", source: quest }
+    - { key: metropolis.gadget.keys,   slot: gadget, name: "Keys to the City",    source: quest }
+    - { key: metropolis.statue.bronze, slot: statue, name: "Bronze Statue",       source: level }
+shop:
+  sections:
+    zones: { source: discovery }
+    freeItems:
+      - { key: metropolis.hat.hardhat,    name: "Gold Hardhat" }
+      - { key: metropolis.decor.fountain, name: "Plaza Fountain" }
+    humanServices:
+      - { key: svc.book-dietz,     name: "Planning Session with John Dietz", action: { type: link, url: "https://ro.am/johndietz/book-me" } }
+      - { key: svc.konstruct-crew, name: "Konstruct Crew · City Engineers",  action: { type: link, url: "https://www.civo.com/konstruct#contact" } }
+    resources: []
+progression:
+  xpEvents:
+    - { event: first-zone,  xp: 50 }
+    - { event: ship-app,    xp: 25 }
+    - { event: app-live,    xp: 15 }
+    - { event: scale-app,   xp: 20 }
+    - { event: friday-ship, xp: 50 }
+  quests:
+    - { key: metropolis.q1,  title: "Incorporation Papers",   hook: create-zone,   xp: 50, reward: metropolis.sash.ribbon }
+    - { key: metropolis.q2,  title: "Register the Blueprint", hook: register-app,  xp: 50 }
+    - { key: metropolis.q3,  title: "Groundbreaking",         hook: ship-app,      xp: 100 }
+    - { key: metropolis.q4,  title: "Building Inspector",     hook: build-logs,    xp: 30 }
+    - { key: metropolis.q5,  title: "Second Wing",            hook: scale-app,     xp: 75 }
+    - { key: metropolis.q6,  title: "Grand Opening",          hook: public-url,    xp: 75 }
+    - { key: metropolis.q7,  title: "Renovation Order",       hook: redeploy,      xp: 75 }
+    - { key: metropolis.q8,  title: "New Supply Route",       hook: change-branch, xp: 100 }
+    - { key: metropolis.q9,  title: "Twin Cities",            hook: create-zone,   xp: 150 }
+    - { key: metropolis.q10, title: "City Hall Patron",       hook: shop,          xp: 50 }
+    - { key: metropolis.q11, title: "Keys to the City",       hook: streak,        xp: 300, reward: metropolis.gadget.keys }
+universeView:
+  name: "Metro Map"
+  composition: >
+    The whole city from a composed aerial vantage: every district ever claimed
+    at its lot, every building ever constructed on its block — demolished
+    buildings remain as memorial pocket parks. Live buildings glow; traffic runs.
+  growthRule: "only accretes — every district claimed and every building ever shipped leaves permanent structure"
+  dataOverlay: { toggle: true, defaultOff: true, contents: [zone-names, app-names, urls, status] }
+surprises:
+  easterEggBudget: 3
+  ambient:
+    - { trigger: friday-ship, effect: "Friday Festival — double fireworks and searchlights over the whole skyline" }
+    - { trigger: tenth-ship,  effect: "a zeppelin crosses the skyline trailing a Konstruct banner" }
+storyline:
+  slots:
+    references: ["civo", "konstruct"]
+    flavor: ["the Metropolis Herald news ticker", "golden hour at every real dusk"]
+generation:
+  promptVersion: 0
+  model: "hand-authored"
