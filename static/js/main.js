@@ -145,6 +145,9 @@ async function boot() {
   const gamectl = createGame(store, actions, hud);
   const character = createCharacterScreen(store, gamectl, wizards);
   const shop = createShop(store, gamectl, wizards, actions);
+  const { createUniverse } = await import("./ui/universe.js");
+  const universe = createUniverse(store, layout, engine, gamectl);
+  wizards.railBtn("Metro Map", universe.open);
   wizards.railBtn("City Hall", shop.open);
   wizards.railBtn("The Mayor", character.open);
   gamectl.onChange((g) => hud.setMayor({ name: g.name, level: levelFor(g.xp), xp: g.xp }));

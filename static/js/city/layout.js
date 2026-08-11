@@ -256,6 +256,29 @@ export function createCityLayout(scene, roads) {
     return stepChanged;
   }
 
+  // Metro Map support: materialize what the world ledger remembers but the
+  // live platform no longer has — districts unclaimed before this session
+  // become faded plates, vanished apps become memorial parks. Accretion,
+  // even across sessions.
+  function ensureGhosts(ever) {
+    for (const zoneName of ever.zones || []) {
+      if (!districts.has(zoneName)) {
+        const d = ensureDistrict({ name: zoneName, display_name: zoneName });
+        d.plate.material.transparent = true;
+        d.plate.material.opacity = 0.45;
+        d.ghost = true;
+      }
+    }
+    for (const rec of ever.apps || []) {
+      if (buildings.has(rec.n)) continue;
+      const d = districts.get(rec.z);
+      if (!d) continue;
+      if (d.group.getObjectByName(`memorial:${rec.n}`)) continue;
+      const lotIdx = claimLot(d, rec.n);
+      d.group.add(makeMemorialPark(rec.n, lotPosition(lotIdx)));
+    }
+  }
+
   return {
     reconcile,
     districts,
@@ -264,5 +287,6 @@ export function createCityLayout(scene, roads) {
     buildingOf: (appName) => buildings.get(appName),
     setConstructionProgress,
     clearProgress: (appName) => progress.delete(appName),
+    ensureGhosts,
   };
 }
