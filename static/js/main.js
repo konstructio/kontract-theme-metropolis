@@ -36,10 +36,22 @@ async function boot() {
     return;
   }
 
-  const [{ createEngine }, { createDayNight }, { createGround }] = await Promise.all([
+  const [
+    { createEngine },
+    { createDayNight },
+    { createGround, createPlaza },
+    { createRoadNetwork },
+    { createCityLayout },
+    { store },
+    { sampleSnapshot, startSampleTimeline },
+  ] = await Promise.all([
     import("./engine/scene.js"),
     import("./engine/daynight.js"),
     import("./city/props.js"),
+    import("./city/roads.js"),
+    import("./city/layout.js"),
+    import("./store.js"),
+    import("./sample-data.js"),
   ]);
 
   const engine = createEngine({
@@ -48,7 +60,24 @@ async function boot() {
   });
 
   createGround(engine.scene);
+  createPlaza(engine.scene);
+  const roads = createRoadNetwork(engine.scene);
+  const layout = createCityLayout(engine.scene, roads);
   const dayNight = createDayNight(engine.scene);
+
+  store.subscribe((state, keys) => {
+    if (keys.has("zones") || keys.has("apps") || keys.has("platform")) {
+      layout.reconcile(state);
+    }
+  });
+
+  if (launched) {
+    // M5: bridge.js boots the real data feed here.
+    store.update({ launched: true });
+  } else {
+    store.update(sampleSnapshot());
+    startSampleTimeline(store);
+  }
 
   // The sun only needs a real-time nudge now and then, not every frame.
   let skyAccum = 0;
