@@ -4,7 +4,7 @@
 // theme may talk to the platform.
 
 import { store } from "./store.js";
-import { friendlyError } from "./util.js";
+import { friendlyError, parseCpu, parseMemGi } from "./util.js";
 
 const APP_POLL_MS = 15000; // only when app-events is unavailable
 const RECONCILE_MS = 60000; // safety net even in push mode
@@ -104,21 +104,42 @@ export function createBridge({ toast }) {
     }
   }
 
+  // Quota dimensions arrive as Kubernetes quantity strings ("2", "2Gi";
+  // limit empty = uncapped) — normalize to numbers (cores / GiB) so the HUD
+  // and fit preview do plain math. limit 0 downstream means "uncapped".
+  function normalizeQuota(q) {
+    const dim = (d, parse) => ({
+      used: parse((d && d.used) || "0"),
+      limit: parse((d && d.limit) || "0"),
+    });
+    return {
+      plan: (q && q.plan) || "",
+      capped: !!(q && q.capped),
+      cpu: dim(q && q.cpu, parseCpu),
+      memory: dim(q && q.memory, parseMemGi),
+      storage: dim(q && q.storage, parseMemGi),
+    };
+  }
+
   async function refreshQuota() {
     const caps = store.state.platform.caps;
     if (!caps.includes("quota")) return;
     try {
-      store.update({ quota: await kontract.quota(org) });
+      store.update({ quota: normalizeQuota(await kontract.quota(org)) });
     } catch (e) {
       console.warn("quota refresh failed:", e);
     }
   }
 
-  // metrics wheel — a few Live apps per tick so a big city never bursts
+  // metrics wheel — a few Live apps per tick so a big city never bursts.
+  // NOTE: the platform does NOT advertise a "metrics" capability token
+  // (platformCapabilities() in konstruct-api lists none) even though the
+  // broker allows the op — so feature-detect by trying, and stand down only
+  // after the op itself fails repeatedly.
   let wheelIdx = 0;
+  let metricsFailStreak = 0;
   async function metricsTick() {
-    const caps = store.state.platform.caps;
-    if (!caps.includes("metrics")) return;
+    if (metricsFailStreak >= 3) return; // op genuinely unavailable here
     const live = store.state.apps.filter((a) => a.phase === "Live");
     if (!live.length) return;
     const batch = [];
@@ -128,6 +149,8 @@ export function createBridge({ toast }) {
     wheelIdx = (wheelIdx + METRICS_PER_TICK) % live.length;
 
     const metrics = { ...store.state.metrics };
+    let okThisTick = 0;
+    let failThisTick = 0;
     await Promise.all(
       batch.map(async (app) => {
         try {
@@ -143,12 +166,15 @@ export function createBridge({ toast }) {
             mem: series.memory || [],
             net: series.network_rx || series.network_tx || [],
           };
+          okThisTick++;
         } catch (_) {
-          /* metrics are decoration; skip quietly */
+          failThisTick++; // decoration; skip quietly
         }
       })
     );
-    store.update({ metrics });
+    if (okThisTick > 0) metricsFailStreak = 0;
+    else if (failThisTick > 0) metricsFailStreak++;
+    if (okThisTick > 0 || Object.keys(metrics).length) store.update({ metrics });
   }
 
   // ---------------- app sync: push if advertised, else poll ----------------

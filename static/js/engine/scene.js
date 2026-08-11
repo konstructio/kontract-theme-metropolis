@@ -72,6 +72,21 @@ export function createEngine({ canvasRoot, labelsRoot }) {
   const clock = new THREE.Clock();
   let running = false;
 
+  // Eased camera flight; any pointer input cancels it (noteInput fires first,
+  // so a user grabbing the controls mid-flight just takes over).
+  let flight = null; // {fromPos, fromTarget, toPos, toTarget, t}
+  function flyTo(pos, target, seconds = 1.4) {
+    flight = {
+      fromPos: camera.position.clone(),
+      fromTarget: controls.target.clone(),
+      toPos: pos.clone(),
+      toTarget: target.clone(),
+      t: 0,
+      seconds,
+    };
+  }
+  renderer.domElement.addEventListener("pointerdown", () => (flight = null), { passive: true });
+
   function frame() {
     if (!running) return;
     requestAnimationFrame(frame);
@@ -81,10 +96,18 @@ export function createEngine({ canvasRoot, labelsRoot }) {
     if (!idleOrbiting && performance.now() - lastInputAt > IDLE_ORBIT_AFTER_MS) {
       idleOrbiting = true;
     }
-    if (idleOrbiting) {
+    if (idleOrbiting && !flight) {
       const offset = camera.position.clone().sub(controls.target);
       offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), IDLE_ORBIT_SPEED * dt);
       camera.position.copy(controls.target).add(offset);
+    }
+
+    if (flight) {
+      flight.t = Math.min(1, flight.t + dt / flight.seconds);
+      const e = 1 - Math.pow(1 - flight.t, 3); // easeOutCubic
+      camera.position.lerpVectors(flight.fromPos, flight.toPos, e);
+      controls.target.lerpVectors(flight.fromTarget, flight.toTarget, e);
+      if (flight.t >= 1) flight = null;
     }
 
     controls.update();
@@ -110,6 +133,7 @@ export function createEngine({ canvasRoot, labelsRoot }) {
     camera,
     renderer,
     controls,
+    flyTo,
     onFrame(cb) {
       frameCallbacks.add(cb);
       return () => frameCallbacks.delete(cb);

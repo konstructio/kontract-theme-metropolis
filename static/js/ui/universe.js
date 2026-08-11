@@ -16,28 +16,9 @@ export function createUniverse(store, layout, engine, gamectl) {
   let active = false;
   let overlayOn = false;
   let savedCam = null;
-  let flight = null; // {fromPos, fromTarget, toPos, toTarget, t}
   const labels = [];
   let panel = null;
-
-  engine.onFrame((dt) => {
-    if (!flight) return;
-    flight.t = Math.min(1, flight.t + dt / 1.4);
-    const e = 1 - Math.pow(1 - flight.t, 3); // easeOutCubic
-    engine.camera.position.lerpVectors(flight.fromPos, flight.toPos, e);
-    engine.controls.target.lerpVectors(flight.fromTarget, flight.toTarget, e);
-    if (flight.t >= 1) flight = null;
-  });
-
-  function flyTo(pos, target) {
-    flight = {
-      fromPos: engine.camera.position.clone(),
-      fromTarget: engine.controls.target.clone(),
-      toPos: pos.clone(),
-      toTarget: target.clone(),
-      t: 0,
-    };
-  }
+  const flyTo = (pos, target) => engine.flyTo(pos, target);
 
   function clearLabels() {
     for (const l of labels) l.removeFromParent();

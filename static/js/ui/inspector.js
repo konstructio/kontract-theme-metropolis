@@ -9,7 +9,7 @@ import { phaseWord, phaseColor, WORDS } from "./vocab.js";
 const UNDER_CONSTRUCTION = new Set(["Building", "Pushing", "Deploying"]);
 
 export function createInspector(store, layout, ctx = {}) {
-  const { actions = null, wizards = null, hud = null } = ctx;
+  const { actions = null, wizards = null, hud = null, focusDistrict = null } = ctx;
   const root = document.getElementById("panel-root");
   let openFor = null;
   let activeTab = "meters";
@@ -362,6 +362,10 @@ export function createInspector(store, layout, ctx = {}) {
       el("aside", { class: "panel" },
         el("header", {}, el("h2", {}, zone ? zone.display_name || zone.name : zoneName), el("button", { class: "x", onclick: close }, "×")),
         el("p", { class: "muted" }, `district · ${apps.length} ${apps.length === 1 ? WORDS.app : WORDS.apps}`),
+        focusDistrict
+          ? el("div", { class: "mrow", style: "justify-content:flex-start;margin-top:4px" },
+              el("button", { class: "mini-btn", onclick: () => focusDistrict(zoneName) }, "✈ fly here"))
+          : null,
         el("ul", { class: "district-apps" },
           apps.map((a) => {
             const li = el("li", {},

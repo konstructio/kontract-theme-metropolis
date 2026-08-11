@@ -4,6 +4,7 @@
 
 import { el } from "../util.js";
 import { QUESTS, COSMETICS, levelFor } from "./quests.js";
+import { mayorPortraitSVG } from "../city/mayor.js";
 
 const SLOTS = ["hat", "suit", "sash", "gadget", "statue"];
 const SLOT_ICONS = { hat: "⛑", suit: "🧥", sash: "🎗", gadget: "🗝", statue: "🗿" };
@@ -46,11 +47,16 @@ export function createCharacterScreen(store, gamectl, wizards) {
         el("span", { class: "q-xp" }, `${q.xp} xp`));
     });
 
+    const portrait = el("div", { class: "mayor-portrait" });
+    portrait.append(mayorPortraitSVG(g.equipped));
+
     wizards.openModal("The Mayor",
       el("div", { class: "mayor-head" },
+        portrait,
         el("div", { class: "mayor-stats" },
           el("label", {}, "Name", nameInput),
-          el("p", { class: "muted" }, `Level ${lvl} · ${g.xp} XP (XP is shared across every theme — it only ever grows)`))),
+          el("p", { class: "muted" }, `Level ${lvl} · ${g.xp} XP (XP is shared across every theme — it only ever grows)`),
+          el("p", { class: "muted" }, "Equipped items show on the portrait — and on the Mayor strolling the plaza."))),
       el("h3", {}, "Cosmetics"),
       ...slotRows.filter(Boolean),
       el("h3", {}, "Quest Board"),

@@ -104,10 +104,25 @@ async function boot() {
   });
 
   createPicking(engine, layout, store);
+
+  const focusDistrict = async (zoneName) => {
+    const THREE = await import("three");
+    if (!zoneName) {
+      engine.flyTo(new THREE.Vector3(70, 52, 70), new THREE.Vector3(0, 0, 0));
+      return;
+    }
+    const d = layout.districtOf(zoneName);
+    if (!d) return;
+    const back = d.center.clone().normalize().multiplyScalar(d.plateHalf * 1.9);
+    const pos = d.center.clone().add(back).add(new THREE.Vector3(0, d.plateHalf * 1.5 + 14, 0));
+    engine.flyTo(pos, d.center.clone().setY(2));
+  };
+
   const hud = createHud(store, {
     dayNight,
     effects,
     onSelectApp: (name) => store.update({ selection: { type: "app", id: name } }),
+    onFocusDistrict: focusDistrict,
   });
   window.addEventListener("keydown", (e) => {
     if (e.key === "Escape") {
@@ -140,9 +155,13 @@ async function boot() {
       import("./ui/shop.js"),
     ]);
   const wizards = createWizards(store, actions, hud, effects);
-  createInspector(store, layout, { actions, wizards, hud });
+  createInspector(store, layout, { actions, wizards, hud, focusDistrict });
+
+  const { createMayor } = await import("./city/mayor.js");
 
   const gamectl = createGame(store, actions, hud);
+  const mayor = createMayor(engine.scene, gamectl);
+  engine.onFrame((dt) => mayor.update(dt));
   const character = createCharacterScreen(store, gamectl, wizards);
   const shop = createShop(store, gamectl, wizards, actions);
   const { createUniverse } = await import("./ui/universe.js");

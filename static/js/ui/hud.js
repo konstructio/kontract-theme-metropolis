@@ -6,7 +6,7 @@
 import { el } from "../util.js";
 import { WORDS, phaseWord } from "./vocab.js";
 
-export function createHud(store, { dayNight, effects, onSelectApp }) {
+export function createHud(store, { dayNight, effects, onSelectApp, onFocusDistrict }) {
   const top = document.getElementById("hud-top");
   const bottom = document.getElementById("hud-bottom");
   const toastStack = document.getElementById("toast-stack");
@@ -36,6 +36,24 @@ export function createHud(store, { dayNight, effects, onSelectApp }) {
     mayorEl.textContent = `${name} · lvl ${level} · ${xp} xp`;
   }
 
+  // ---- district chips: one click centers the camera on any zone ----
+  const districtRow = el("div", { class: "district-chips" });
+  top.insertAdjacentElement("afterend", districtRow);
+
+  function renderDistrictChips(state) {
+    districtRow.textContent = "";
+    if (!onFocusDistrict) return;
+    const chips = [{ name: null, label: "◉ Plaza" }].concat(
+      state.zones.map((z) => ({ name: z.name, label: z.display_name || z.name }))
+    );
+    if (chips.length === 1) return; // no districts yet — nothing to jump to
+    for (const c of chips) {
+      const b = el("button", { class: "d-chip" }, c.label);
+      b.addEventListener("click", () => onFocusDistrict(c.name));
+      districtRow.append(b);
+    }
+  }
+
   // ---- bottom: incidents chip + herald ticker ----
   const incidentsChip = el("button", { class: "incidents", hidden: "hidden" });
   incidentsChip.addEventListener("click", () => {
@@ -50,21 +68,26 @@ export function createHud(store, { dayNight, effects, onSelectApp }) {
   skipBtn.addEventListener("click", () => effects.skip());
   document.getElementById("hud").append(skipBtn);
 
-  function fmtQty(q) {
-    return `${Math.round(q.used * 10) / 10}/${q.limit}`;
-  }
-
   function render(state, keys) {
     if (keys.has("org")) orgEl.textContent = state.org ? `· ${state.org}` : "";
 
     if (keys.has("quota") && state.quota) {
       const { cpu, memory } = state.quota;
-      if (cpu && cpu.limit) cpuFill.style.width = `${Math.min(100, (cpu.used / cpu.limit) * 100)}%`;
-      if (memory && memory.limit) memFill.style.width = `${Math.min(100, (memory.used / memory.limit) * 100)}%`;
-      quotaText.textContent = cpu && memory ? `cpu ${fmtQty(cpu)} · mem ${fmtQty(memory)}` : "";
+      const dimText = (d, unit) => {
+        if (!d) return "";
+        const used = Math.round((d.used || 0) * 10) / 10;
+        return d.limit ? `${used}/${d.limit}${unit}` : `${used}${unit} · uncapped`;
+      };
+      cpuFill.style.width = cpu && cpu.limit ? `${Math.min(100, (cpu.used / cpu.limit) * 100)}%` : "100%";
+      memFill.style.width = memory && memory.limit ? `${Math.min(100, (memory.used / memory.limit) * 100)}%` : "100%";
+      cpuFill.style.opacity = cpu && cpu.limit ? "1" : "0.25";
+      memFill.style.opacity = memory && memory.limit ? "1" : "0.25";
+      quotaText.textContent = `cpu ${dimText(cpu, "")} · mem ${dimText(memory, "Gi")}`;
       const hot = (cpu && cpu.limit && cpu.used / cpu.limit > 0.85) || (memory && memory.limit && memory.used / memory.limit > 0.85);
       quotaWrap.classList.toggle("hot", !!hot);
     }
+
+    if (keys.has("zones")) renderDistrictChips(state);
 
     if (keys.has("apps")) {
       const failed = state.apps.filter((a) => a.phase === "Failed");
@@ -85,7 +108,7 @@ export function createHud(store, { dayNight, effects, onSelectApp }) {
   }
 
   store.subscribe(render);
-  render(store.state, new Set(["org", "quota", "apps", "ticker", "celebration"]));
+  render(store.state, new Set(["org", "quota", "apps", "zones", "ticker", "celebration"]));
 
   // city clock ticks on its own
   setInterval(() => {

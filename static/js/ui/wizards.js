@@ -203,7 +203,15 @@ export function createWizards(store, actions, hud, effects) {
       }
       const addCpu = parseCpu(sz.cpu) * form.replicas;
       const after = (q.cpu.used || 0) + addCpu;
-      const pct = q.cpu.limit ? Math.min(100, (after / q.cpu.limit) * 100) : 0;
+      if (!q.cpu.limit) {
+        fitBar.style.width = "100%";
+        fitBar.style.background = "var(--teal)";
+        fitBar.style.opacity = "0.25";
+        fitText.textContent = `${WORDS.quota}: uncapped — cpu ${Math.round(after * 100) / 100} after construction`;
+        return;
+      }
+      fitBar.style.opacity = "1";
+      const pct = Math.min(100, (after / q.cpu.limit) * 100);
       fitBar.style.width = `${pct}%`;
       fitBar.style.background = pct > 100 - 0.001 ? "var(--danger)" : pct > 85 ? "var(--ember)" : "var(--teal)";
       fitText.textContent =

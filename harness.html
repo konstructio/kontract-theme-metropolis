@@ -94,7 +94,10 @@
     discover: () => ({
       version: "v2",
       org: { name: ORG, display_name: "Harness Org" },
-      capabilities: ["apps", "zones", "quota", "runtime-logs", "app-events", "volumes", "custom-domains", "metrics", "character", "shop", "universe"],
+      // mirror konstruct-api platformCapabilities() EXACTLY — notably there
+      // is no "metrics" token even though the metrics op works; the theme
+      // must feature-detect ops the capability list doesn't name
+      capabilities: ["apps", "zones", "themes", "character", "runtime-logs", "quota", "app-events", "volumes", "custom-domains"],
       app_sizes: [
         { key: "xs", cpu: "250m", memory: "256Mi" },
         { key: "s", cpu: "500m", memory: "512Mi" },
@@ -110,9 +113,12 @@
       { repo_name: "harness/ledger", repo_url: "https://git.example.com/harness/ledger" },
       { repo_name: "harness/new-idea", repo_url: "https://git.example.com/harness/new-idea" },
     ],
+    // real shape: Kubernetes quantity STRINGS, limit empty when uncapped
     quota: () => ({
       plan: "harness", capped: true,
-      cpu: { used: 3.5, limit: 8 }, memory: { used: 3.5, limit: 12 }, storage: { used: 1, limit: 10 },
+      cpu: { used: "3500m", limit: "8" },
+      memory: { used: "3584Mi", limit: "12Gi" },
+      storage: { used: "1Gi", limit: "10Gi" },
     }),
     metrics: (org, name) => ({
       series: [
