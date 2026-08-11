@@ -36,7 +36,31 @@ async function boot() {
     return;
   }
 
-  // M1+: engine, store, and data source mount here.
+  const [{ createEngine }, { createDayNight }, { createGround }] = await Promise.all([
+    import("./engine/scene.js"),
+    import("./engine/daynight.js"),
+    import("./city/props.js"),
+  ]);
+
+  const engine = createEngine({
+    canvasRoot: document.getElementById("canvas-root"),
+    labelsRoot: document.getElementById("labels-root"),
+  });
+
+  createGround(engine.scene);
+  const dayNight = createDayNight(engine.scene);
+
+  // The sun only needs a real-time nudge now and then, not every frame.
+  let skyAccum = 0;
+  engine.onFrame((dt) => {
+    skyAccum += dt;
+    if (skyAccum > 5) {
+      skyAccum = 0;
+      dayNight.update();
+    }
+  });
+
+  engine.start();
 }
 
 boot();
