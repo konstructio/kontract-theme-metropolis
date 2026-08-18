@@ -1,6 +1,6 @@
 // CityState — the single source of truth. bridge.js (or sample-data.js)
 // writes in; city/engine/ui read out. Nothing downstream ever talks to the
-// kontract directly.
+// theme directly.
 
 const state = {
   launched: false,

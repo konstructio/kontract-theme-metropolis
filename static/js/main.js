@@ -1,11 +1,11 @@
 // Metropolis boot. Decides launched vs standalone, checks WebGL2, and wires
 // the data source (bridge or sample) into the store, then starts the engine.
 //
-// The gate MUST reference the top-level `kontract` const from kontract.js
-// (a classic script). `window.kontract` is always undefined — checking it
+// The gate MUST reference the top-level `theme` const from theme.js
+// (a classic script). `window.theme` is always undefined — checking it
 // silently drops every theme into sample mode.
 
-const launched = typeof kontract !== "undefined" && kontract.isLaunched();
+const launched = typeof theme !== "undefined" && theme.isLaunched();
 
 function webgl2Available() {
   try {
