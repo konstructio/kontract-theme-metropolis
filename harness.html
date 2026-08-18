@@ -2,7 +2,7 @@
 <!-- LOCAL DEV ONLY — never shipped (lives outside static/, go:embed can't see it).
 
      A mock Konstruct parent window: iframes the theme with the same sandbox
-     attributes the real platform uses and answers kontract-rpc / stream
+     attributes the real platform uses and answers theme-rpc / stream
      messages from fixtures. Write ops mutate the fixture state and log their
      exact payloads, so the wizards can be exercised end-to-end offline.
 
@@ -199,7 +199,7 @@
   function pushAppEvent(evt) {
     for (const [id, s] of streams) {
       if (s.op === "appEvents") {
-        frame.contentWindow.postMessage({ type: "kontract-stream-event", id, event: "app", data: JSON.stringify(evt) }, "*");
+        frame.contentWindow.postMessage({ type: "theme-stream-event", id, event: "app", data: JSON.stringify(evt) }, "*");
       }
     }
   }
@@ -208,12 +208,12 @@
     const m = e.data;
     if (!m || e.source !== frame.contentWindow) return;
 
-    if (m.type === "kontract-rpc") {
+    if (m.type === "theme-rpc") {
       logOp(m.op, m.args);
       const reply = (ok, dataOrErr, status) =>
         frame.contentWindow.postMessage(
-          ok ? { type: "kontract-rpc-result", id: m.id, ok: true, data: dataOrErr }
-             : { type: "kontract-rpc-result", id: m.id, ok: false, error: dataOrErr, status },
+          ok ? { type: "theme-rpc-result", id: m.id, ok: true, data: dataOrErr }
+             : { type: "theme-rpc-result", id: m.id, ok: false, error: dataOrErr, status },
           "*"
         );
       if (failOps.has(m.op)) return reply(false, "harness: simulated failure for " + m.op, 500);
@@ -226,10 +226,10 @@
       }
     }
 
-    if (m.type === "kontract-stream-open") {
+    if (m.type === "theme-stream-open") {
       logOp(m.op + " [stream open]", m.args);
       if (streams.size >= 3) {
-        frame.contentWindow.postMessage({ type: "kontract-stream-close", id: m.id, reason: "stream limit exceeded" }, "*");
+        frame.contentWindow.postMessage({ type: "theme-stream-close", id: m.id, reason: "stream limit exceeded" }, "*");
         return;
       }
       const s = { op: m.op, args: m.args, timer: null };
@@ -240,14 +240,14 @@
         s.timer = setInterval(() => {
           n++;
           frame.contentWindow.postMessage({
-            type: "kontract-stream-event", id: m.id, event: "log",
+            type: "theme-stream-event", id: m.id, event: "log",
             data: JSON.stringify({ pod: name + "-pod-1", time: new Date().toISOString(), line: `[harness] ${name} request #${n} served in ${(Math.random() * 40 + 2) | 0}ms` }),
           }, "*");
         }, 700);
       }
     }
 
-    if (m.type === "kontract-stream-close") {
+    if (m.type === "theme-stream-close") {
       const s = streams.get(m.id);
       if (s) { if (s.timer) clearInterval(s.timer); streams.delete(m.id); logOp("stream closed by theme", [m.id]); }
     }

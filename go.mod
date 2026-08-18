@@ -1,3 +1,3 @@
-module github.com/konstructio/kontract-theme-metropolis
+module github.com/konstructio/theme-metropolis
 
 go 1.23

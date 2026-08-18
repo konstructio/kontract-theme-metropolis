@@ -1,13 +1,13 @@
-# kontract-theme-metropolis
+# theme-metropolis
 
 Your org as a living low-poly 3D city. Districts are zones, buildings are
 apps, cranes are builds, fires are failures, and the sun tracks your real
-local time. A [Kontract](https://konstruct.civo.com/docs/next/konduit/kontract)
+local time. A [Theme](https://konstruct.civo.com/docs/next/konduit/theme)
 theme, `game` profile, full write surface. A
 [Theme Labs](https://konstruct.civo.com/docs/next/konduit/labs) experiment —
 unsupported, fun on purpose.
 
-Upstream: [konstructio/kontract-theme-metropolis](https://github.com/konstructio/kontract-theme-metropolis).
+Upstream: [konstructio/theme-metropolis](https://github.com/konstructio/theme-metropolis).
 
 Rendering: three.js (vendored in `static/vendor/`, no build step, no CDN).
 Server: the starter theme's Go static server (`go:embed`), built by
@@ -27,10 +27,10 @@ Dev-only query params:
 ## Layout
 
 - `theme-manifest.yaml` — source of truth for the theme's self-description
-- `KONTRACT.md` — header block generated from the manifest (never edit by hand)
-- `static/kontract.js` — byte-for-byte copy from kontract-theme-starter; never edit
+- `THEME.md` — header block generated from the manifest (never edit by hand)
+- `static/theme.js` — byte-for-byte copy from theme-starter; never edit
 - `static/js/` — `main.js` boot, `store.js` CityState, `bridge.js` (only module
-  that touches `kontract`), `city/` world geometry, `engine/` renderer +
+  that touches `theme`), `city/` world geometry, `engine/` renderer +
   animation, `ui/` HUD/inspector/wizards/game screens
-- `harness.html` — local-only mock parent window answering kontract postMessages
+- `harness.html` — local-only mock parent window answering theme postMessages
   with fixtures; lives at repo root so it never ships in the embedded bundle

@@ -1,7 +1,7 @@
 // The living-city layer: traffic on the road network, pedestrians, rooftop
 // smog scaled by real CPU, three-alarm fires on Failed apps, blinking
 // antenna tips and the fountain. Everything reads the store; nothing here
-// ever calls the kontract.
+// ever calls the theme.
 
 import * as THREE from "three";
 import { appVibe } from "../store.js";

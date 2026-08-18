@@ -1,5 +1,5 @@
-// kontract-theme-metropolis — the org as a living 3D city.
-// Serves the static frontend; all kontract logic lives in the browser.
+// theme-metropolis — the org as a living 3D city.
+// Serves the static frontend; all theme logic lives in the browser.
 //
 // Assets are embedded in the binary (go:embed) because cloud-native
 // buildpacks strip source files from the final image — a bare
@@ -28,7 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 	http.Handle("/", requestLog(http.FileServer(http.FS(static))))
-	log.Printf("kontract-metropolis serving on :%s", port)
+	log.Printf("theme-metropolis serving on :%s", port)
 	log.Fatal(http.ListenAndServe(":"+port, nil))
 }
 

@@ -1,4 +1,4 @@
-// The only module that touches the `kontract` const. Feeds the store from
+// The only module that touches the `theme` const. Feeds the store from
 // the platform (polls + streams under a hard 3-stream budget) and exposes
 // every write action the wizards and inspector call. Nothing else in the
 // theme may talk to the platform.
@@ -14,7 +14,7 @@ const METRICS_TICK_MS = 20000; // metrics wheel: a few live apps per tick
 const METRICS_PER_TICK = 3;
 
 export function createBridge({ toast }) {
-  /* global kontract */
+  /* global theme */
   const org = new URLSearchParams(window.location.search).get("org") || "";
 
   // ---------------- normalize ----------------
@@ -86,7 +86,7 @@ export function createBridge({ toast }) {
     if (appsBusy) return;
     appsBusy = true;
     try {
-      const raw = (await kontract.apps(org)) || [];
+      const raw = (await theme.apps(org)) || [];
       store.update({ apps: raw.map(normalizeApp) });
     } catch (e) {
       console.warn("apps refresh failed:", e);
@@ -97,7 +97,7 @@ export function createBridge({ toast }) {
 
   async function refreshZones() {
     try {
-      const raw = (await kontract.zones(org)) || [];
+      const raw = (await theme.zones(org)) || [];
       store.update({ zones: raw.map(normalizeZone) });
     } catch (e) {
       console.warn("zones refresh failed:", e);
@@ -125,7 +125,7 @@ export function createBridge({ toast }) {
     const caps = store.state.platform.caps;
     if (!caps.includes("quota")) return;
     try {
-      store.update({ quota: normalizeQuota(await kontract.quota(org)) });
+      store.update({ quota: normalizeQuota(await theme.quota(org)) });
     } catch (e) {
       console.warn("quota refresh failed:", e);
     }
@@ -154,7 +154,7 @@ export function createBridge({ toast }) {
     await Promise.all(
       batch.map(async (app) => {
         try {
-          const res = await kontract.metrics(org, app.name, { range: "1h", step: "2m" });
+          const res = await theme.metrics(org, app.name, { range: "1h", step: "2m" });
           const series = {};
           for (const s of (res && res.series) || []) series[s.name] = s.points || [];
           const lastOf = (s) => (s && s.length ? s[s.length - 1].v : 0);
@@ -189,9 +189,9 @@ export function createBridge({ toast }) {
   }
 
   function watchApps() {
-    if (typeof kontract.appEvents !== "function") return startPolling();
+    if (typeof theme.appEvents !== "function") return startPolling();
     const closer = guardedSubscribe((onPlatformClose) =>
-      kontract.appEvents(
+      theme.appEvents(
         org,
         () => refreshApps(),
         (reason) => {
@@ -217,7 +217,7 @@ export function createBridge({ toast }) {
       return () => {};
     }
     const closer = guardedSubscribe((onPlatformClose) =>
-      kontract.logs(
+      theme.logs(
         org,
         appName,
         (payload) => {
@@ -256,46 +256,46 @@ export function createBridge({ toast }) {
     org: () => org,
 
     async createZone(name, displayName) {
-      await kontract.createZone(org, { name, display_name: displayName });
+      await theme.createZone(org, { name, display_name: displayName });
       setTimeout(refreshZones, 1500); // ship-it pattern: give the CR a beat
       setTimeout(refreshQuota, 1600);
     },
 
     async deleteZone(name) {
-      await kontract.deleteZone(org, name);
+      await theme.deleteZone(org, name);
       setTimeout(refreshZones, 1200);
     },
 
     async shipApp(payload) {
       // exact ship-it payload shape; namespace pinned to the launched org
-      await kontract.shipApp({ ...payload, namespace: org });
+      await theme.shipApp({ ...payload, namespace: org });
       await refreshApps();
       refreshQuota();
     },
 
     async updateApp(name, body) {
-      await kontract.updateApp(org, name, body);
+      await theme.updateApp(org, name, body);
       await refreshApps();
       refreshQuota();
     },
 
     async deleteApp(name) {
-      await kontract.deleteApp(org, name);
+      await theme.deleteApp(org, name);
       await refreshApps();
       refreshQuota();
     },
 
     async redeploy(name) {
-      await kontract.redeploy(org, name);
+      await theme.redeploy(org, name);
       await refreshApps();
     },
 
-    buildLogs: (name) => kontract.buildLogs(org, name),
-    deployments: (name) => kontract.deployments(org, name),
+    buildLogs: (name) => theme.buildLogs(org, name),
+    deployments: (name) => theme.deployments(org, name),
 
     async appRepos() {
       try {
-        const repos = (await kontract.appRepos(org)) || [];
+        const repos = (await theme.appRepos(org)) || [];
         if (repos.length) return repos;
       } catch (_) {
         /* fall through to derivation */
@@ -311,8 +311,8 @@ export function createBridge({ toast }) {
       return [...seen.values()];
     },
 
-    character: () => kontract.character(org),
-    saveCharacter: (spec) => kontract.saveCharacter(org, spec),
+    character: () => theme.character(org),
+    saveCharacter: (spec) => theme.saveCharacter(org, spec),
     openLogs,
     closeLogs,
     refreshApps,
@@ -325,7 +325,7 @@ export function createBridge({ toast }) {
     store.update({ launched: true, org });
     let disc;
     try {
-      disc = await kontract.discover(org);
+      disc = await theme.discover(org);
     } catch (e) {
       toast("CITY OFFLINE", friendlyError(e), "error");
       store.addTicker("error", `discovery failed: ${friendlyError(e)}`);
@@ -348,8 +348,8 @@ export function createBridge({ toast }) {
     refreshQuota();
     metricsTick();
 
-    if (typeof kontract.regions === "function") {
-      kontract.regions(org).then(
+    if (typeof theme.regions === "function") {
+      theme.regions(org).then(
         (r) => store.update({ platform: { ...store.state.platform, regions: r || [] } }),
         () => {}
       );
